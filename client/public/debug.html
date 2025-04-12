@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>考勤系统调试工具</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: #2c3e50;
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .tabs {
+      display: flex;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #dfe6e9;
+    }
+    .tab {
+      padding: 12px 25px;
+      cursor: pointer;
+      background: #f8f9fa;
+      border: 1px solid #dfe6e9;
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      margin-right: 5px;
+      transition: all 0.3s;
+    }
+    .tab.active {
+      background: #ffffff;
+      color: #3498db;
+      font-weight: 500;
+      border-color: #dfe6e9;
+      border-bottom: 1px solid #ffffff;
+      margin-bottom: -1px;
+    }
+    .tab-content {
+      display: none;
+      background: #ffffff;
+      border-radius: 0 8px 8px 8px;
+      padding: 25px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .panel {
+      margin-bottom: 25px;
+      border: 1px solid #dfe6e9;
+      border-radius: 8px;
+      padding: 20px;
+      background: #f8f9fa;
+    }
+    .panel h2 {
+      color: #2c3e50;
+      font-size: 20px;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #dfe6e9;
+    }
+    .form-group {
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+    }
+    label {
+      display: inline-block;
+      width: 120px;
+      font-weight: 500;
+      color: #2c3e50;
+    }
+    input, select {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #dfe6e9;
+      border-radius: 6px;
+      font-size: 14px;
+      background: #ffffff;
+      color: #2c3e50;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    input:focus, select:focus {
+      border-color: #3498db;
+      box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
+      outline: none;
+    }
+    button {
+      background: #3498db;
+      color: #ffffff;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.3s, transform 0.2s, box-shadow 0.3s;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    button:hover {
+      background: #2980b9;
+      box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+    }
+    button:active {
+      transform: scale(0.98);
+    }
+    button.secondary {
+      background: #95a5a6;
+    }
+    button.secondary:hover {
+      background: #7f8c8d;
+    }
+    button.danger {
+      background: #e74c3c;
+    }
+    button.danger:hover {
+      background: #c0392b;
+    }
+    .log {
+      height: 300px;
+      overflow-y: auto;
+      border: 1px solid #dfe6e9;
+      padding: 15px;
+      background: #ffffff;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .status {
+      padding: 10px;
+      margin-bottom: 15px;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+    .connected {
+      background: #e8f5e9;
+      color: #27ae60;
+      border: 1px solid #27ae60;
+    }
+    .disconnected {
+      background: #ffebee;
+      color: #c0392b;
+      border: 1px solid #c0392b;
+    }
+    .video-wrapper {
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%; /* 16:9 */
+      background: #f1f3f5;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      border: 1px solid #dfe6e9;
+    }
+    video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .scan-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 70%;
+      height: 70%;
+      border: 2px dashed #3498db;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      opacity: 0.7;
+    }
+    #result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    #result.success {
+      background: #e8f5e9;
+      color: #27ae60;
+      border: 1px solid #27ae60;
+    }
+    #result.error {
+      background: #ffebee;
+      color: #c0392b;
+      border: 1px solid #c0392b;
+    }
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 25px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .toast.show {
+      opacity: 1;
+    }
+    .toast.success {
+      background: rgba(39, 174, 96, 0.9);
+      color: #ffffff;
+    }
+    .toast.error {
+      background: rgba(192, 57, 43, 0.9);
+      color: #ffffff;
+    }
+    #qrcode-container {
+      width: 200px;
+      height: 200px;
+      margin: 20px auto;
+      padding: 10px;
+      border: 1px solid #dfe6e9;
+      background: #ffffff;
+      border-radius: 8px;
+      position: relative;
+    }
+    #qrcode {
+      width: 100%;
+      height: 100%;
+    }
+    #status-text {
+      font-size: 42px;
+      font-weight: 700;
+      color: #ffffff;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    #qrCountdown {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      font-size: 12px;
+      color: #555;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 3px 6px;
+      border-radius: 4px;
+    }
+    .attended {
+      background-color: #2ecc71 !important;
+    }
+    .absent {
+      background-color: #e74c3c !important;
+    }
+    .late {
+      background-color: #f39c12 !important;
+    }
+    .leave {
+      background-color: #3498db !important;
+    }
+    #currentTime {
+      color: #7f8c8d;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+    .info {
+      background: #fafafa;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+      text-align: left;
+      font-size: 15px;
+      color: #34495e;
+      line-height: 1.8;
+    }
+    .info span {
+      font-weight: 600;
+      color: #2c3e50;
+    }
+    @media (max-width: 768px) {
+      .container {
+        padding: 10px;
+      }
+      .tab {
+        padding: 10px 15px;
+        font-size: 14px;
+      }
+      .panel {
+        padding: 15px;
+      }
+      label {
+        width: 100px;
+      }
+      #qrcode-container {
+        width: 180px;
+        height: 180px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>考勤系统调试工具</h1>
+    
+    <div class="tabs">
+      <div class="tab active" data-tab="connection">连接管理</div>
+      <div class="tab" data-tab="admin">管理员功能</div>
+      <div class="tab" data-tab="student">学生功能</div>
+      <div class="tab" data-tab="logs">消息日志</div>
+    </div>
+    
+    <!-- 连接管理 -->
+    <div id="connection-tab" class="tab-content active">
+      <div class="panel">
+        <h2>WebSocket 连接</h2>
+        <div id="connectionStatus" class="status disconnected">未连接</div>
+        <div class="form-group">
+          <label for="wsProtocol">协议:</label>
+          <select id="wsProtocol">
+            <option value="wss://">wss:// (安全)</option>
+            <option value="ws://">ws:// (非安全)</option>
+          </select>
+        </div>
+        <button id="connectBtn">连接</button>
+        <button id="disconnectBtn" class="secondary">断开</button>
+      </div>
+    </div>
+    
+    <!-- 管理员功能 -->
+    <div id="admin-tab" class="tab-content">
+      <div class="panel">
+        <h2>摄像头扫码</h2>
+        <div class="video-wrapper">
+          <video id="video" autoplay></video>
+          <div class="scan-overlay"></div>
+        </div>
+        <div class="form-group">
+          <label for="cameraSelect">摄像头:</label>
+          <select id="cameraSelect">
+            <option value="">选择摄像头</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="adminStatusSelect">状态:</label>
+          <select id="adminStatusSelect">
+            <option value="present">出勤</option>
+            <option value="absent">缺勤</option>
+            <option value="late">迟到</option>
+            <option value="leave">请假</option>
+          </select>
+        </div>
+        <button id="scanBtn">开始扫码</button>
+        <button id="stopScanBtn" class="secondary">停止扫码</button>
+        <div id="adminResult"></div>
+      </div>
+      
+      <div class="panel">
+        <h2>手动签到</h2>
+        <div class="form-group">
+          <label for="manualUserId">用户 ID:</label>
+          <input type="number" id="manualUserId" placeholder="输入用户ID">
+        </div>
+        <div class="form-group">
+          <label for="manualAdminId">管理员 ID:</label>
+          <input type="number" id="manualAdminId" placeholder="输入管理员ID" value="1">
+        </div>
+        <div class="form-group">
+          <label for="manualStudentName">学生姓名:</label>
+          <input type="text" id="manualStudentName" placeholder="输入学生姓名" value="张三">
+        </div>
+        <div class="form-group">
+          <label for="manualStatusSelect">状态:</label>
+          <select id="manualStatusSelect">
+            <option value="present">出勤</option>
+            <option value="absent">缺勤</option>
+            <option value="late">迟到</option>
+            <option value="leave">请假</option>
+          </select>
+        </div>
+        <button id="manualSubmitBtn">提交签到</button>
+        <button id="manualExpiredBtn" class="secondary">提交过期签到</button>
+        <button id="clearQRBtn" class="danger">清除二维码</button>
+      </div>
+    </div>
+    
+    <!-- 学生功能 -->
+    <div id="student-tab" class="tab-content">
+      <div class="panel">
+        <h2>学生信息</h2>
+        <div class="form-group">
+          <label for="studentUserId">用户 ID:</label>
+          <input type="number" id="studentUserId" placeholder="输入用户ID" value="1">
+        </div>
+        <div class="form-group">
+          <label for="studentName">学生姓名:</label>
+          <input type="text" id="studentName" placeholder="输入学生姓名" value="张三">
+        </div>
+        <div class="form-group">
+          <label for="studentNo">学号:</label>
+          <input type="text" id="studentNo" placeholder="输入学号" value="20230001">
+        </div>
+        <button id="initStudentBtn">初始化学生端</button>
+      </div>
+      
+      <div class="panel">
+        <h2>学生端模拟</h2>
+        <div id="currentTime"></div>
+        <div class="info" id="userInfo"></div>
+        <div id="qrcode-container">
+          <div id="qrcode"></div>
+          <span id="status-text"></span>
+          <div id="qrCountdown"></div>
+        </div>
+        <div id="studentStatus" class="status"></div>
+        <button id="refreshQRBtn" class="secondary">刷新二维码</button>
+        <button id="simulatePresentBtn">模拟出勤</button>
+        <button id="simulateLateBtn">模拟迟到</button>
+        <button id="simulateAbsentBtn" class="danger">模拟缺勤</button>
+        <button id="simulateLeaveBtn">模拟请假</button>
+      </div>
+    </div>
+    
+    <!-- 消息日志 -->
+    <div id="logs-tab" class="tab-content">
+      <div class="panel">
+        <h2>消息日志</h2>
+        <div id="messageLog" class="log"></div>
+        <button id="clearLogBtn" class="secondary">清除日志</button>
+        <button id="exportLogBtn">导出日志</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  
+  <script>
+    // 全局变量
+    let ws;
+    let scanning = false;
+    let paused = false;
+    let stream = null;
+    let cameras = [];
+    let selectedCameraId = null;
+    let lastScannedUserId = null;
+    let lastScanTime = 0;
+    let qrCountdownInterval;
+    const REPEAT_SCAN_COOLDOWN = 10000; // 10秒冷却
+    const QR_CODE_VALIDITY_PERIOD = 15000; // 15秒有效期
+    
+    // DOM 加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+      initTabs();
+      initConnection();
+      initAdmin();
+      initStudent();
+      updateTime();
+      setInterval(updateTime, 1000);
+    });
+    
+    // 标签页切换
+    function initTabs() {
+      const tabs = document.querySelectorAll('.tab');
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          tabs.forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          
+          const tabContents = document.querySelectorAll('.tab-content');
+          tabContents.forEach(content => content.classList.remove('active'));
+          document.getElementById(`${tab.dataset.tab}-tab`).classList.add('active');
+        });
+      });
+    }
+    
+    // 更新时间显示
+    function updateTime() {
+      const now = new Date();
+      const timeString = now.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+      const currentTimeElement = document.getElementById('currentTime');
+      if (currentTimeElement) {
+        currentTimeElement.textContent = `当前时间: ${timeString}`;
+      }
+    }
+    
+    // 连接管理
+    function initConnection() {
+      const connectBtn = document.getElementById('connectBtn');
+      const disconnectBtn = document.getElementById('disconnectBtn');
+      
+      connectBtn.addEventListener('click', connectWebSocket);
+      disconnectBtn.addEventListener('click', disconnectWebSocket);
+    }
+    
+    function connectWebSocket() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        showToast('已经连接到 WebSocket 服务器', 'default');
+        return;
+      }
+      
+      const protocol = document.getElementById('wsProtocol').value;
+      const host = window.location.host;
+      ws = new WebSocket(`${protocol}${host}/ws`);
+      
+      ws.onopen = () => {
+        document.getElementById('connectionStatus').textContent = '已连接';
+        document.getElementById('connectionStatus').className = 'status connected';
+        logMessage('WebSocket 连接已建立');
+        showToast('WebSocket 连接已建立', 'success');
+      };
+      
+      ws.onclose = () => {
+        document.getElementById('connectionStatus').textContent = '未连接';
+        document.getElementById('connectionStatus').className = 'status disconnected';
+        logMessage('WebSocket 连接已关闭');
+        showToast('WebSocket 连接已关闭', 'error');
+      };
+      
+      ws.onerror = (error) => {
+        logMessage('WebSocket 错误: ' + JSON.stringify(error));
+        showToast('WebSocket 连接错误', 'error');
+      };
+      
+      ws.onmessage = (event) => {
+        logMessage('收到消息: ' + event.data);
+        handleAdminMessage(event.data);
+        handleStudentMessage(event.data);
+      };
+    }
+    
+    function disconnectWebSocket() {
+      if (ws) {
+        ws.close();
+      }
+      if (stream) {
+        stopScanning();
+      }
+    }
+    
+    // 管理员功能
+    function initAdmin() {
+      const scanBtn = document.getElementById('scanBtn');
+      const stopScanBtn = document.getElementById('stopScanBtn');
+      const cameraSelect = document.getElementById('cameraSelect');
+      const manualSubmitBtn = document.getElementById('manualSubmitBtn');
+      const manualExpiredBtn = document.getElementById('manualExpiredBtn');
+      const clearQRBtn = document.getElementById('clearQRBtn');
+      
+      scanBtn.addEventListener('click', startScanning);
+      stopScanBtn.addEventListener('click', stopScanning);
+      cameraSelect.addEventListener('change', changeCamera);
+      manualSubmitBtn.addEventListener('click', manualSubmitAttendance);
+      manualExpiredBtn.addEventListener('click', manualSubmitExpiredAttendance);
+      clearQRBtn.addEventListener('click', clearQRCode);
+      
+      populateCameraOptions();
+    }
+    
+    async function populateCameraOptions() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        cameras = devices.filter(device => device.kind === 'videoinput');
+        const cameraSelect = document.getElementById('cameraSelect');
+        cameraSelect.innerHTML = '<option value="">选择摄像头</option>';
+        cameras.forEach((camera, index) => {
+          const option = document.createElement('option');
+          option.value = camera.deviceId;
+          option.text = camera.label || `摄像头 ${index + 1}`;
+          cameraSelect.appendChild(option);
+        });
+        if (cameras.length > 0) {
+          selectedCameraId = cameras.find(cam => cam.label.includes('back'))?.deviceId || cameras[0].deviceId;
+          cameraSelect.value = selectedCameraId;
+        }
+      } catch (error) {
+        console.error('获取摄像头失败:', error);
+        document.getElementById('adminResult').textContent = '无法获取摄像头列表';
+        showToast('无法获取摄像头列表', 'error');
+      }
+    }
+    
+    async function startScanning() {
+      const videoWrapper = document.querySelector('.video-wrapper');
+      if (!scanning) {
+        scanning = true;
+        paused = false;
+        document.getElementById('scanBtn').textContent = '暂停扫码';
+        document.getElementById('adminResult').textContent = '正在扫描...';
+        videoWrapper.classList.add('scanning');
+        await startVideo(selectedCameraId);
+        requestAnimationFrame(scan);
+      } else if (!paused) {
+        paused = true;
+        document.getElementById('scanBtn').textContent = '恢复扫码';
+        document.getElementById('adminResult').textContent = '扫描已暂停';
+        videoWrapper.classList.remove('scanning');
+      } else {
+        paused = false;
+        document.getElementById('scanBtn').textContent = '暂停扫码';
+        document.getElementById('adminResult').textContent = '正在扫描...';
+        videoWrapper.classList.add('scanning');
+        requestAnimationFrame(scan);
+      }
+    }
+    
+    async function startVideo(deviceId) {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+
+      const constraints = {
+        video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'environment' }
+      };
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        document.getElementById('video').srcObject = stream;
+        selectedCameraId = deviceId || cameras.find(cam => cam.label.includes('back'))?.deviceId || cameras[0]?.deviceId;
+      } catch (error) {
+        console.error('启动摄像头失败:', error);
+        document.getElementById('adminResult').textContent = '无法启动摄像头';
+        showToast('无法启动摄像头', 'error');
+        scanning = false;
+        document.getElementById('scanBtn').textContent = '开始扫码';
+      }
+    }
+    
+    function stopScanning() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        scanning = false;
+        paused = false;
+        document.getElementById('scanBtn').textContent = '开始扫码';
+        document.getElementById('adminResult').textContent = '扫码已停止';
+        document.querySelector('.video-wrapper').classList.remove('scanning');
+      }
+    }
+    
+    function changeCamera() {
+      if (scanning) {
+        selectedCameraId = document.getElementById('cameraSelect').value;
+        startVideo(selectedCameraId);
+      }
+    }
+    
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    function scan() {
+      if (!scanning || paused) return;
+      
+      const video = document.getElementById('video');
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.height = video.videoHeight;
+        canvas.width = video.videoWidth;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert'
+        });
+
+        if (code) {
+          const resultDiv = document.getElementById('adminResult');
+          resultDiv.classList.remove('success', 'error');
+          try {
+            const qrData = JSON.parse(decodeURIComponent(code.data));
+            const userId = Number(qrData.userId);
+            const name = qrData.name;
+            const timestamp = Number(qrData.timestamp);
+            const now = Date.now();
+
+            const timeDifference = now - timestamp;
+            if (timeDifference > QR_CODE_VALIDITY_PERIOD) {
+              showToast(`二维码已过期（有效期 ${QR_CODE_VALIDITY_PERIOD / 1000} 秒），请刷新二维码`, 'error');
+              requestAnimationFrame(scan);
+              return;
+            }
+
+            if (lastScannedUserId === userId && (now - lastScanTime) < REPEAT_SCAN_COOLDOWN) {
+              const remaining = Math.ceil((REPEAT_SCAN_COOLDOWN - (now - lastScanTime)) / 1000);
+              showToast(`用户 ${name} 已在短时间内签到，请等待 ${remaining} 秒`, 'error');
+              requestAnimationFrame(scan);
+              return;
+            }
+
+            const statusMap = {
+              'present': '出勤',
+              'absent': '缺勤',
+              'late': '迟到',
+              'leave': '请假'
+            };
+            const status = document.getElementById('adminStatusSelect').value;
+            const statusText = statusMap[status];
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'submitAttendance',
+                userId,
+                adminId: 1, // 默认管理员ID
+                status: status,
+                studentInfo: { userId, name },
+                timestamp
+              }));
+              
+              resultDiv.textContent = `签到成功: ${name} - ${statusText} (${new Date().toLocaleTimeString()})`;
+              resultDiv.classList.add('success');
+              lastScannedUserId = userId;
+              lastScanTime = now;
+            }
+          } catch (e) {
+            resultDiv.textContent = '二维码解析失败，请重试';
+            resultDiv.classList.add('error');
+            console.error('二维码解析错误:', e);
+          }
+        }
+      }
+      requestAnimationFrame(scan);
+    }
+    
+    function manualSubmitAttendance() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        showToast('未连接到 WebSocket 服务器', 'error');
+        return;
+      }
+      
+      const userId = document.getElementById('manualUserId').value;
+      const adminId = document.getElementById('manualAdminId').value;
+      const name = document.getElementById('manualStudentName').value;
+      const status = document.getElementById('manualStatusSelect').value;
+      
+      if (!userId) {
+        showToast('请输入用户ID', 'error');
+        return;
+      }
+      
+      const message = {
+        type: 'submitAttendance',
+        userId: Number(userId),
+        adminId: Number(adminId),
+        status: status,
+        studentInfo: { userId: Number(userId), name },
+        timestamp: Date.now()
+      };
+      
+      ws.send(JSON.stringify(message));
+      logMessage('发送手动签到消息: ' + JSON.stringify(message));
+      showToast(`已提交用户 ${name} 的签到`, 'success');
+    }
+    
+    function manualSubmitExpiredAttendance() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        showToast('未连接到 WebSocket 服务器', 'error');
+        return;
+      }
+      
+      const userId = document.getElementById('manualUserId').value;
+      const adminId = document.getElementById('manualAdminId').value;
+      const name = document.getElementById('manualStudentName').value;
+      const status = document.getElementById('manualStatusSelect').value;
+      
+      if (!userId) {
+        showToast('请输入用户ID', 'error');
+        return;
+      }
+      
+      const message = {
+        type: 'submitAttendance',
+        userId: Number(userId),
+        adminId: Number(adminId),
+        status: status,
+        studentInfo: { userId: Number(userId), name },
+        timestamp: Date.now() - 20000 // 20秒前，应该过期
+      };
+      
+      ws.send(JSON.stringify(message));
+      logMessage('发送过期签到消息: ' + JSON.stringify(message));
+      showToast(`已提交用户 ${name} 的过期签到`, 'default');
+    }
+    
+    function clearQRCode() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        showToast('未连接到 WebSocket 服务器', 'error');
+        return;
+      }
+      
+      const userId = document.getElementById('manualUserId').value;
+      if (!userId) {
+        showToast('请输入用户ID', 'error');
+        return;
+      }
+      
+      const message = {
+        type: 'clearQRCode',
+        userId: Number(userId)
+      };
+      
+      ws.send(JSON.stringify(message));
+      logMessage('发送清除二维码消息: ' + JSON.stringify(message));
+      showToast(`已请求清除用户 ${userId} 的二维码`, 'success');
+    }
+    
+    function handleAdminMessage(message) {
+      try {
+        const data = typeof message === 'string' ? JSON.parse(message) : message;
+        const resultDiv = document.getElementById('adminResult');
+        
+        if (data.type === 'error') {
+          resultDiv.classList.remove('success', 'error');
+          resultDiv.textContent = `错误: ${data.message}`;
+          resultDiv.classList.add('error');
+          showToast(data.message, 'error');
+        } else if (data.type === 'duplicateAttendance') {
+          showToast(`用户 ${data.studentInfo.name} 今日已签到`, 'error');
+        }
+      } catch (e) {
+        console.error('处理管理员消息错误:', e);
+      }
+    }
+    
+    // 学生功能
+    function initStudent() {
+      const initStudentBtn = document.getElementById('initStudentBtn');
+      const refreshQRBtn = document.getElementById('refreshQRBtn');
+      const simulatePresentBtn = document.getElementById('simulatePresentBtn');
+      const simulateLateBtn = document.getElementById('simulateLateBtn');
+      const simulateAbsentBtn = document.getElementById('simulateAbsentBtn');
+      const simulateLeaveBtn = document.getElementById('simulateLeaveBtn');
+      
+      initStudentBtn.addEventListener('click', initStudentData);
+      refreshQRBtn.addEventListener('click', refreshQRCode);
+      simulatePresentBtn.addEventListener('click', () => simulateAttendance('present', '出勤'));
+      simulateLateBtn.addEventListener('click', () => simulateAttendance('late', '迟到'));
+      simulateAbsentBtn.addEventListener('click', () => simulateAttendance('absent', '缺勤'));
+      simulateLeaveBtn.addEventListener('click', () => simulateAttendance('leave', '请假'));
+    }
+    
+    function initStudentData() {
+      const userId = document.getElementById('studentUserId').value;
+      const name = document.getElementById('studentName').value;
+      const no = document.getElementById('studentNo').value;
+      
+      document.getElementById('userInfo').innerHTML = `
+        <div><span>姓名:</span> ${name}</div>
+        <div><span>学号:</span> ${no}</div>
+      `;
+      
+      updateQRCode();
+      document.getElementById('studentStatus').textContent = '请出示二维码以考勤';
+      clearInterval(qrCountdownInterval);
+      qrCountdownInterval = startCountdown();
+      
+      logMessage(`初始化学生端: ID=${userId}, 姓名=${name}, 学号=${no}`);
+      showToast('学生端已初始化', 'success');
+    }
+    
+    function generateQRCodeData() {
+      const userId = document.getElementById('studentUserId').value;
+      const name = document.getElementById('studentName').value;
+      const timestamp = Date.now();
+      return JSON.stringify({ userId: Number(userId), name, timestamp });
+    }
+    
+    function updateQRCode() {
+      const qrcodeDiv = document.getElementById('qrcode');
+      qrcodeDiv.innerHTML = '';
+      
+      const container = document.getElementById('qrcode-container');
+      const containerWidth = container.clientWidth - 20;
+      new QRCode(qrcodeDiv, {
+        text: encodeURIComponent(generateQRCodeData()),
+        width: containerWidth,
+        height: containerWidth,
+        colorDark: '#000000',
+        colorLight: '#ffffff'
+      });
+    }
+    
+    function refreshQRCode() {
+      updateQRCode();
+      document.getElementById('qrCountdown').textContent = `刷新倒计时: 10s`;
+      clearInterval(qrCountdownInterval);
+      qrCountdownInterval = startCountdown();
+      logMessage('手动刷新了二维码');
+      showToast('二维码已刷新', 'success');
+    }
+    
+    function startCountdown() {
+      let timeLeft = 10;
+      const countdownDiv = document.getElementById('qrCountdown');
+      countdownDiv.textContent = `刷新倒计时: ${timeLeft}s`;
+      
+      return setInterval(() => {
+        timeLeft--;
+        countdownDiv.textContent = `刷新倒计时: ${timeLeft}s`;
+        if (timeLeft <= 0) {
+          timeLeft = 10;
+          if (document.getElementById('studentStatus').textContent === '请出示二维码以考勤') {
+            updateQRCode();
+          }
+        }
+      }, 1000);
+    }
+    
+    function simulateAttendance(statusCode, statusText) {
+      const userId = document.getElementById('studentUserId').value;
+      const name = document.getElementById('studentName').value;
+      
+      const mockData = {
+        type: 'attendanceUpdated',
+        data: {
+          f_29yzstin559: Number(userId),
+          f_0kiw0ulq188: statusCode,
+          updated_at: new Date().toLocaleString('zh-CN', { 
+            year: 'numeric', 
+            month: '2-digit', 
+            day: '2-digit', 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit', 
+            hour12: false 
+          }).replace(/\//g, '-')
+        },
+        studentInfo: { userId: Number(userId), name }
+      };
+      
+      handleStudentMessage(JSON.stringify(mockData));
+      logMessage(`模拟签到: ${statusText} - ${JSON.stringify(mockData)}`);
+      showToast(`模拟 ${statusText} 成功`, 'success');
+    }
+    
+    function handleStudentMessage(message) {
+      try {
+        const data = typeof message === 'string' ? JSON.parse(message) : message;
+        const statusDiv = document.getElementById('studentStatus');
+        const qrcodeContainer = document.getElementById('qrcode-container');
+        const statusText = document.getElementById('status-text');
+        
+        if (data.type === 'attendanceStatus') {
+          if (!data.data) {
+            statusDiv.textContent = '请出示二维码以考勤';
+            statusText.textContent = '';
+            qrcodeContainer.className = 'qrcode-container';
+            statusDiv.className = 'status';
+          } else {
+            updateStatus(data.data);
+            clearInterval(qrCountdownInterval);
+            document.getElementById('qrCountdown').textContent = '';
+          }
+        } else if (data.type === 'attendanceUpdated') {
+          qrcodeContainer.innerHTML = '<div id="qrcode"></div><span id="status-text"></span><div id="qrCountdown"></div>';
+          updateStatus(data.data);
+          clearInterval(qrCountdownInterval);
+          document.getElementById('qrCountdown').textContent = '';
+        } else if (data.type === 'clearQRCode') {
+          qrcodeContainer.innerHTML = '<div id="qrcode"></div><span id="status-text"></span><div id="qrCountdown"></div>';
+          statusDiv.textContent = '二维码已清除，请重新签到';
+          statusText.textContent = '';
+          qrcodeContainer.className = 'qrcode-container';
+          statusDiv.className = 'status';
+          updateQRCode();
+          qrCountdownInterval = startCountdown();
+        } else if (data.type === 'error') {
+          statusDiv.textContent = `错误: ${data.message}`;
+          qrcodeContainer.innerHTML = '<div id="qrcode"></div><span id="status-text">错误</span><div id="qrCountdown"></div>';
+          qrcodeContainer.className = 'qrcode-container absent';
+          statusDiv.className = 'status absent';
+          clearInterval(qrCountdownInterval);
+          document.getElementById('qrCountdown').textContent = '';
+        }
+      } catch (e) {
+        console.error('处理学生消息错误:', e);
+      }
+    }
+    
+    function updateStatus(attendanceData) {
+      const statusDiv = document.getElementById('studentStatus');
+      const qrcodeContainer = document.getElementById('qrcode-container');
+      const statusText = document.getElementById('status-text');
+      const statusMap = {
+        'present': '出勤',
+        'absent': '缺勤',
+        'late': '迟到',
+        'leave': '请假'
+      };
+      const status = statusMap[attendanceData.f_0kiw0ulq188] || '未知状态';
+      const updatedAt = attendanceData.updated_at || '未知时间';
+      
+      statusText.textContent = status;
+      qrcodeContainer.className = 'qrcode-container';
+      statusDiv.className = 'status';
+      
+      let flashColor;
+      switch(status) {
+        case '出勤':
+          qrcodeContainer.classList.add('attended');
+          statusDiv.classList.add('attended');
+          flashColor = '#27ae60';
+          break;
+        case '缺勤':
+          qrcodeContainer.classList.add('absent');
+          statusDiv.classList.add('absent');
+          flashColor = '#c0392b';
+          break;
+        case '迟到':
+          qrcodeContainer.classList.add('late');
+          statusDiv.classList.add('late');
+          flashColor = '#e67e22';
+          break;
+        case '请假':
+          qrcodeContainer.classList.add('leave');
+          statusDiv.classList.add('leave');
+          flashColor = '#2980b9';
+          break;
+      }
+      
+      statusDiv.innerHTML = `签到状态: ${status}<br>更新时间: ${updatedAt}`;
+      flashBackground(flashColor);
+    }
+    
+    function flashBackground(color) {
+      document.body.style.backgroundColor = color;
+      setTimeout(() => {
+        document.body.style.backgroundColor = '#f5f5f5';
+        setTimeout(() => {
+          document.body.style.backgroundColor = color;
+          setTimeout(() => {
+            document.body.style.backgroundColor = '#f5f5f5';
+          }, 200);
+        }, 200);
+      }, 200);
+    }
+    
+    // 日志功能
+    function logMessage(message) {
+      const timestamp = new Date().toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+      
+      const logElement = document.getElementById('messageLog');
+      logElement.textContent += `[${timestamp}] ${message}\n`;
+      logElement.scrollTop = logElement.scrollHeight;
+    }
+    
+    document.getElementById('clearLogBtn').addEventListener('click', () => {
+      document.getElementById('messageLog').textContent = '';
+      showToast('日志已清除', 'success');
+    });
+    
+    document.getElementById('exportLogBtn').addEventListener('click', () => {
+      const logContent = document.getElementById('messageLog').textContent;
+      const blob = new Blob([logContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `考勤系统日志_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('日志已导出', 'success');
+    });
+    
+    // 显示Toast通知
+    function showToast(message, type = 'default') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast ${type}`;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+    
+    // 页面卸载时清理
+    window.addEventListener('beforeunload', () => {
+      if (ws) {
+        ws.close();
+      }
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      clearInterval(qrCountdownInterval);
+    });
+  </script>
+</body>
+</html>

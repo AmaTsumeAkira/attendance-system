@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>考勤二维码</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Arial', sans-serif;
+    background: #f5f5f5; /* Softer background for less strain */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 15px; /* Slightly more padding for smaller screens */
+    transition: background-color 0.3s ease; /* Smoother transition */
+  }
+
+  .container {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); /* Softer, larger shadow */
+    padding: 25px; /* More internal space */
+    width: 100%;
+    max-width: 420px; /* Slightly wider for better content fit */
+    text-align: center;
+  }
+
+  .header {
+    margin-bottom: 20px; /* Increased spacing */
+  }
+
+  .header h1 {
+    color: #2c3e50; /* Darker, more readable color */
+    font-size: clamp(22px, 6vw, 30px); /* Slightly larger base size */
+    font-weight: 600; /* Bolder for emphasis */
+  }
+
+  #currentTime {
+    color: #7f8c8d; /* Softer gray for secondary info */
+    font-size: clamp(14px, 4vw, 16px);
+    margin-top: 8px; /* More spacing */
+  }
+
+  .info {
+    background: #fafafa; /* Lighter background for contrast */
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+    text-align: left;
+    font-size: clamp(15px, 4vw, 17px); /* Slightly larger for readability */
+    color: #34495e; /* Softer dark color */
+    line-height: 1.8; /* Increased line height for clarity */
+  }
+
+  .info span {
+    font-weight: 600; /* Bolder labels */
+    color: #2c3e50;
+  }
+
+  #qrcode-container {
+    margin: 20px auto; /* More vertical spacing */
+    padding: 12px; /* Slightly more padding */
+    background: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); /* Subtle shadow */
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    position: relative;
+    max-width: 380px; /* Adjusted to fit container padding */
+    transition: background-color 0.3s ease; /* Smooth status change */
+  }
+
+  #qrcode {
+    width: 100%;
+    height: 100%;
+  }
+
+  #status-text {
+    font-size: clamp(42px, 10vw, 60px); /* Slightly larger for emphasis */
+    font-weight: 700; /* Bolder for visibility */
+    color: #ffffff;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Shadow for readability */
+  }
+
+  #qrCountdown {
+    position: absolute;
+    bottom: 8px; /* Slightly higher */
+    right: 8px;
+    font-size: 14px;
+    color: #555;
+    background: rgba(255, 255, 255, 0.9); /* More opaque */
+    padding: 4px 8px; /* More padding */
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+  }
+
+  /* Status-specific styles */
+  #qrcode-container.attended { background-color: #2ecc71; }
+  #qrcode-container.absent { background-color: #e74c3c; }
+  #qrcode-container.late { background-color: #f39c12; }
+  #qrcode-container.leave { background-color: #3498db; }
+
+  #status {
+    font-size: clamp(15px, 4vw, 18px); /* Larger base size */
+    color: #333; /* Darker for readability */
+    margin-top: 20px;
+    padding: 12px; /* More padding */
+    border-radius: 6px;
+    word-break: break-word;
+    line-height: 1.6; /* Better spacing */
+    transition: background-color 0.3s ease;
+  }
+
+  #status.attended { background: #e8f5e9; color: #27ae60; }
+  #status.absent { background: #ffebee; color: #c0392b; }
+  #status.late { background: #fff3e0; color: #e67e22; }
+  #status.leave { background: #e3f2fd; color: #2980b9; }
+
+  /* Media Queries for Responsiveness */
+  @media (max-width: 600px) {
+    body { padding: 10px; }
+    .container {
+      padding: 20px;
+      max-width: 100%;
+      margin: 0 5px;
+    }
+    .header { margin-bottom: 15px; }
+    .info {
+      padding: 12px;
+      margin-bottom: 15px;
+    }
+    #qrcode-container { 
+      margin: 15px auto; 
+      max-width: calc(100% - 20px);
+    }
+    #status {
+      margin-top: 15px;
+      padding: 10px;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>考勤二维码</h1>
+      <div id="currentTime"></div>
+    </div>
+    <div class="info" id="userInfo"></div>
+    <div id="qrcode-container">
+      <div id="qrcode"></div>
+      <span id="status-text"></span>
+      <div id="qrCountdown"></div>
+    </div>
+    <div id="status"></div>
+  </div>
+  <script src="/qrcode.min.js"></script>
+  <script src="/student.js"></script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'927669067b06bf8b',t:'MTc0MzE1NzM4Ny4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
