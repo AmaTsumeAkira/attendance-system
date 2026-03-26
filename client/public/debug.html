@@ -867,10 +867,20 @@
       const name = document.getElementById('studentName').value;
       const no = document.getElementById('studentNo').value;
       
-      document.getElementById('userInfo').innerHTML = `
-        <div><span>姓名:</span> ${name}</div>
-        <div><span>学号:</span> ${no}</div>
-      `;
+      const userInfoDiv = document.getElementById('userInfo');
+      userInfoDiv.innerHTML = '';
+      const nameDiv = document.createElement('div');
+      const nameLabel = document.createElement('span');
+      nameLabel.textContent = '姓名:';
+      nameDiv.appendChild(nameLabel);
+      nameDiv.appendChild(document.createTextNode(' ' + name));
+      const noDiv = document.createElement('div');
+      const noLabel = document.createElement('span');
+      noLabel.textContent = '学号:';
+      noDiv.appendChild(noLabel);
+      noDiv.appendChild(document.createTextNode(' ' + no));
+      userInfoDiv.appendChild(nameDiv);
+      userInfoDiv.appendChild(noDiv);
       
       updateQRCode();
       document.getElementById('studentStatus').textContent = '请出示二维码以考勤';
@@ -1041,7 +1051,13 @@
           break;
       }
       
-      statusDiv.innerHTML = `签到状态: ${status}<br>更新时间: ${updatedAt}`;
+      statusDiv.textContent = '';
+      const statusLine = document.createElement('div');
+      statusLine.textContent = `签到状态: ${status}`;
+      const timeLine = document.createElement('div');
+      timeLine.textContent = `更新时间: ${updatedAt}`;
+      statusDiv.appendChild(statusLine);
+      statusDiv.appendChild(timeLine);
       flashBackground(flashColor);
     }
     

@@ -287,8 +287,8 @@ wss.on('connection', (ws) => {
         function escapeCSV(val) {
           if (val === null || val === undefined) return '';
           const str = String(val);
-          // 以 =、+、-、@ 开头可能导致公式注入，前缀单引号
-          if (/^[=+\-@]/.test(str)) return "'" + str;
+          // 以 =、+、-、@、\t、\r 开头可能导致公式注入，前缀单引号
+          if (/^[=+\-@\t\r]/.test(str)) return "'" + str;
           if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
             return '"' + str.replace(/"/g, '""') + '"';
           }

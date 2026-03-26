@@ -346,6 +346,7 @@ function renderStats(data) {
 const queryDateBtn = document.getElementById('queryDateBtn');
 const queryDateInput = document.getElementById('queryDate');
 
+const todayStr = new Date().toISOString().split('T')[0];
 queryDateInput.value = todayStr;
 
 queryDateBtn.onclick = () => {
@@ -405,7 +406,6 @@ const exportStartDate = document.getElementById('exportStartDate');
 const exportEndDate = document.getElementById('exportEndDate');
 
 // 设置默认日期为今天
-const todayStr = new Date().toISOString().split('T')[0];
 exportStartDate.value = todayStr;
 exportEndDate.value = todayStr;
 
