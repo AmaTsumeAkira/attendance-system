@@ -26,6 +26,7 @@ document.getElementById('userInfo').innerHTML = `
 
 const wsHost = window.location.host;
 let ws;
+let qrCountdownInterval;
 const REFRESH_INTERVAL = 10; // Refresh every 10 seconds
 
 function generateQRCodeData() {
@@ -135,7 +136,6 @@ function connectWebSocket() {
   };
 }
 
-let qrCountdownInterval;
 connectWebSocket();
 
 function flashBackground(color) {

@@ -136,5 +136,52 @@ wss.on('connection', (ws) => {
         }
       });
     }
+
+    if (data.type === 'getAttendanceStats') {
+      try {
+        const today = getLocalDate();
+
+        // 今日统计
+        const [todayStats] = await db.query(
+          `SELECT f_0kiw0ulq188 AS status, COUNT(*) AS count
+           FROM attendance_records WHERE f_n2a666hq2br = ?
+           GROUP BY f_0kiw0ulq188`, [today]
+        );
+
+        // 总用户数
+        const [totalUsers] = await db.query('SELECT COUNT(*) AS total FROM user_status');
+
+        // 签到排行榜（历史总出勤天数 Top 10）
+        const [leaderboard] = await db.query(
+          `SELECT ar.f_29yzstin559 AS userId, COUNT(*) AS presentDays
+           FROM attendance_records ar
+           WHERE ar.f_0kiw0ulq188 = 'present'
+           GROUP BY ar.f_29yzstin559
+           ORDER BY presentDays DESC
+           LIMIT 10`
+        );
+
+        // 今日出勤详情
+        const [todayDetails] = await db.query(
+          `SELECT f_29yzstin559 AS userId, f_0kiw0ulq188 AS status, updated_at
+           FROM attendance_records WHERE f_n2a666hq2br = ?
+           ORDER BY updated_at ASC`, [today]
+        );
+
+        ws.send(JSON.stringify({
+          type: 'attendanceStats',
+          data: {
+            today,
+            stats: todayStats,
+            totalUsers: totalUsers[0].total,
+            leaderboard,
+            todayDetails
+          }
+        }));
+      } catch (error) {
+        console.error('Stats query error:', error);
+        ws.send(JSON.stringify({ type: 'error', message: '获取统计数据失败: ' + error.message }));
+      }
+    }
   });
 });

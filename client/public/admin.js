@@ -50,21 +50,31 @@ async function startVideo(deviceId) {
     stream.getTracks().forEach(track => track.stop());
   }
 
-  const constraints = {
-    video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: 'environment' }
-  };
-
-  try {
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject = stream;
-    video.style.opacity = '1';
-    selectedCameraId = deviceId || cameras.find(cam => cam.label.includes('back'))?.deviceId || cameras[0]?.deviceId;
-  } catch (error) {
-    console.error('启动摄像头失败:', error);
-    resultDiv.textContent = '无法启动摄像头';
-    scanning = false;
-    scanBtn.textContent = '开始扫码';
+  let constraints;
+  if (deviceId) {
+    try {
+      constraints = { video: { deviceId: { exact: deviceId } } };
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e) {
+      // Fallback: try without exact constraint if selected camera is unavailable
+      console.warn('Selected camera unavailable, falling back:', e);
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      } catch (e2) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+    }
+  } else {
+    try {
+      constraints = { video: { facingMode: 'environment' } };
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (e) {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    }
   }
+  video.srcObject = stream;
+  video.style.opacity = '1';
+  selectedCameraId = deviceId || cameras.find(cam => cam.label.includes('back'))?.deviceId || cameras[0]?.deviceId;
 }
 
 populateCameraOptions();
@@ -228,3 +238,61 @@ window.onunload = () => {
     stream.getTracks().forEach(track => track.stop());
   }
 };
+
+// ===== 签到统计功能 =====
+const statsBtn = document.getElementById('statsBtn');
+const statsPanel = document.getElementById('statsPanel');
+
+statsBtn.onclick = () => {
+  if (statsPanel.style.display === 'none') {
+    ws.send(JSON.stringify({ type: 'getAttendanceStats' }));
+    statsPanel.style.display = 'block';
+    statsBtn.textContent = '📊 隐藏统计';
+  } else {
+    statsPanel.style.display = 'none';
+    statsBtn.textContent = '📊 查看统计';
+  }
+};
+
+const statusLabelMap = { present: '出勤', absent: '缺勤', late: '迟到', leave: '请假' };
+const statusColorMap = { present: '#27ae60', absent: '#c0392b', late: '#e67e22', leave: '#2980b9' };
+
+// Extend ws.onmessage to handle stats
+const origOnMessage = ws.onmessage;
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  if (data.type === 'attendanceStats') {
+    renderStats(data.data);
+    return;
+  }
+
+  // Call original handler
+  if (origOnMessage) origOnMessage.call(ws, event);
+};
+
+function renderStats(data) {
+  const summaryDiv = document.getElementById('todaySummary');
+  const listEl = document.getElementById('leaderboardList');
+
+  // Today summary badges
+  const countMap = {};
+  data.stats.forEach(s => { countMap[s.status] = s.count; });
+  let summaryHTML = `<span style="background:#ecf0f1;padding:6px 12px;border-radius:6px;font-size:14px;">总人数: <b>${data.totalUsers}</b></span>`;
+  for (const [status, label] of Object.entries(statusLabelMap)) {
+    const count = countMap[status] || 0;
+    const color = statusColorMap[status];
+    summaryHTML += `<span style="background:${color}20;color:${color};padding:6px 12px;border-radius:6px;font-size:14px;border:1px solid ${color}40;">${label}: <b>${count}</b></span>`;
+  }
+  summaryDiv.innerHTML = summaryHTML;
+
+  // Leaderboard
+  if (data.leaderboard.length === 0) {
+    listEl.innerHTML = '<li style="color:#999;">暂无数据</li>';
+  } else {
+    listEl.innerHTML = data.leaderboard.map((item, i) => {
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
+      return `<li>${medal} 用户 ${item.userId} — <b>${item.presentDays}</b> 天出勤</li>`;
+    }).join('');
+  }
+}
