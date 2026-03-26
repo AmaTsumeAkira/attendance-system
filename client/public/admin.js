@@ -22,6 +22,16 @@ const scanCooldownMap = new Map(); // Map<userId, timestamp> 防止重复扫描
 const REPEAT_SCAN_COOLDOWN = 10000; // 10秒冷却
 const QR_CODE_VALIDITY_PERIOD = 15000; // 15秒有效期
 
+// 定期清理过期的冷却记录，防止内存泄漏
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, timestamp] of scanCooldownMap) {
+    if (now - timestamp >= REPEAT_SCAN_COOLDOWN) {
+      scanCooldownMap.delete(userId);
+    }
+  }
+}, 60000);
+
 async function populateCameraOptions() {
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -197,7 +207,8 @@ function connectWebSocket() {
   if (ws) {
     ws.close();
   }
-  ws = new WebSocket(`wss://${wsHost}/ws`);
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${protocol}//${wsHost}/ws`);
 
   ws.onopen = () => {
     resultDiv.textContent = 'WebSocket 已连接';
@@ -208,6 +219,11 @@ function connectWebSocket() {
 
     if (data.type === 'attendanceStats') {
       renderStats(data.data);
+      return;
+    }
+
+    if (data.type === 'attendanceByDate') {
+      renderDateRecords(data.data);
       return;
     }
 
@@ -308,14 +324,78 @@ function renderStats(data) {
   }
   summaryDiv.innerHTML = summaryHTML;
 
-  // Leaderboard
+  // Leaderboard - 使用 DOM API 防止 XSS
   if (data.leaderboard.length === 0) {
     listEl.innerHTML = '<li style="color:#999;">暂无数据</li>';
   } else {
-    listEl.innerHTML = data.leaderboard.map((item, i) => {
+    listEl.innerHTML = '';
+    data.leaderboard.forEach((item, i) => {
+      const li = document.createElement('li');
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
-      return `<li>${medal} 用户 ${item.userId} — <b>${item.presentDays}</b> 天出勤</li>`;
-    }).join('');
+      const days = document.createElement('b');
+      days.textContent = item.presentDays;
+      li.textContent = `${medal} 用户 ${item.userId} — `;
+      li.appendChild(days);
+      li.appendChild(document.createTextNode(' 天出勤'));
+      listEl.appendChild(li);
+    });
+  }
+}
+
+// ===== 按日期查询签到记录 =====
+const queryDateBtn = document.getElementById('queryDateBtn');
+const queryDateInput = document.getElementById('queryDate');
+
+queryDateInput.value = todayStr;
+
+queryDateBtn.onclick = () => {
+  const date = queryDateInput.value;
+  if (!date) {
+    showToast('请选择日期', 'error');
+    return;
+  }
+  if (ws.readyState !== WebSocket.OPEN) {
+    showToast('WebSocket 未连接，请稍后重试', 'error');
+    return;
+  }
+  queryDateBtn.textContent = '⏳ 查询中...';
+  queryDateBtn.disabled = true;
+  ws.send(JSON.stringify({ type: 'getAttendanceByDate', date }));
+};
+
+function renderDateRecords(data) {
+  queryDateBtn.textContent = '查询';
+  queryDateBtn.disabled = false;
+  const panel = document.getElementById('dateResultPanel');
+  const summaryDiv = document.getElementById('dateSummary');
+  const listEl = document.getElementById('dateRecordList');
+  panel.style.display = 'block';
+
+  // 统计摘要
+  const countMap = {};
+  data.stats.forEach(s => { countMap[s.status] = s.count; });
+  let summaryHTML = `<span style="background:#ecf0f1;padding:4px 10px;border-radius:6px;font-size:13px;">签到: <b>${data.records.length}</b>/${data.totalUsers}</span>`;
+  for (const [status, label] of Object.entries(statusLabelMap)) {
+    const count = countMap[status] || 0;
+    if (count > 0) {
+      const color = statusColorMap[status];
+      summaryHTML += `<span style="background:${color}20;color:${color};padding:4px 10px;border-radius:6px;font-size:13px;border:1px solid ${color}40;">${label}: <b>${count}</b></span>`;
+    }
+  }
+  summaryDiv.innerHTML = summaryHTML;
+
+  // 记录列表
+  if (data.records.length === 0) {
+    listEl.innerHTML = '<li style="color:#999;">该日期无签到记录</li>';
+  } else {
+    listEl.innerHTML = '';
+    data.records.forEach(r => {
+      const li = document.createElement('li');
+      const label = statusLabelMap[r.status] || r.status;
+      const time = r.updated_at || '';
+      li.textContent = `用户 ${r.userId} — ${label} (${time})`;
+      listEl.appendChild(li);
+    });
   }
 }
 

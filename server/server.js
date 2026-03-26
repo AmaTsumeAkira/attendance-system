@@ -58,10 +58,15 @@ wss.on('connection', (ws) => {
     }
 
     if (data.type === 'checkAttendance') {
-      ws.userId = Number(data.userId);
+      const uid = Number(data.userId);
+      if (!Number.isFinite(uid) || uid <= 0) {
+        ws.send(JSON.stringify({ type: 'error', message: '无效的用户ID' }));
+        return;
+      }
+      ws.userId = uid;
       const [rows] = await db.query(
         'SELECT * FROM attendance_records WHERE f_n2a666hq2br = ? AND f_29yzstin559 = ?',
-        [getLocalDate(), Number(data.userId)]
+        [getLocalDate(), uid]
       );
       ws.send(JSON.stringify({ type: 'attendanceStatus', data: rows[0] || null }));
     }
@@ -71,6 +76,12 @@ wss.on('connection', (ws) => {
       // 输入验证
       if (!userId || !adminId || !status || !timestamp) {
         ws.send(JSON.stringify({ type: 'error', message: '缺少必要参数 (userId, adminId, status, timestamp)' }));
+        return;
+      }
+      const numUserId = Number(userId);
+      const numAdminId = Number(adminId);
+      if (!Number.isFinite(numUserId) || numUserId <= 0 || !Number.isFinite(numAdminId) || numAdminId <= 0) {
+        ws.send(JSON.stringify({ type: 'error', message: '无效的用户ID或管理员ID' }));
         return;
       }
       const validStatuses = ['present', 'absent', 'late', 'leave'];
@@ -97,11 +108,11 @@ wss.on('connection', (ws) => {
 
         const [existing] = await db.query(
           'SELECT f_k1x5891pt2x FROM user_status WHERE id = ?',
-          [Number(userId)]
+          [numUserId]
         );
 
         if (existing.length === 0) {
-          ws.send(JSON.stringify({ type: 'error', message: `用户 ${userId} 在 user_status 中无记录，无法签到` }));
+          ws.send(JSON.stringify({ type: 'error', message: `用户 ${numUserId} 在 user_status 中无记录，无法签到` }));
           return;
         }
 
@@ -109,13 +120,13 @@ wss.on('connection', (ws) => {
         if (oldStatus !== status) {
           await db.query(
             'UPDATE user_status SET f_k1x5891pt2x = ?, updated_at = ? WHERE id = ?',
-            [status, currentTimeFormatted, Number(userId)]
+            [status, currentTimeFormatted, numUserId]
           );
         }
 
         const [existingAttendance] = await db.query(
           'SELECT id, f_0kiw0ulq188 FROM attendance_records WHERE f_n2a666hq2br = ? AND f_29yzstin559 = ? LIMIT 1',
-          [today, Number(userId)]
+          [today, numUserId]
         );
 
         let isUpdate = false;
@@ -123,28 +134,28 @@ wss.on('connection', (ws) => {
           if (existingAttendance[0].f_0kiw0ulq188 !== status) {
             await db.query(
               'UPDATE attendance_records SET f_0kiw0ulq188 = ?, created_by_id = ?, updated_at = ? WHERE id = ?',
-              [status, Number(adminId), currentTimeFormatted, existingAttendance[0].id]
+              [status, numAdminId, currentTimeFormatted, existingAttendance[0].id]
             );
           }
           // 无论状态是否变化，都通知管理员已存在记录（避免误以为未成功）
-          ws.send(JSON.stringify({ type: 'duplicateAttendance', userId: Number(userId), studentInfo }));
+          ws.send(JSON.stringify({ type: 'duplicateAttendance', userId: numUserId, studentInfo }));
           isUpdate = true; // 仍然需要通知学生当前状态
         } else {
           await db.query(
             'INSERT INTO attendance_records (f_n2a666hq2br, f_29yzstin559, f_0kiw0ulq188, created_by_id, updated_at) VALUES (?, ?, ?, ?, ?)',
-            [today, Number(userId), status, Number(adminId), currentTimeFormatted]
+            [today, numUserId, status, numAdminId, currentTimeFormatted]
           );
           isUpdate = true;
         }
 
         if (isUpdate) {
           const attendanceDataBoghew = {
-            f_29yzstin559: Number(userId),
+            f_29yzstin559: numUserId,
             f_0kiw0ulq188: status,
             updated_at: currentTimeFormatted
           };
           wss.clients.forEach(client => {
-            if (client.readyState === WebSocket.OPEN && client.userId === Number(userId)) {
+            if (client.readyState === WebSocket.OPEN && client.userId === numUserId) {
               client.send(JSON.stringify({ 
                 type: 'attendanceUpdated', 
                 data: attendanceDataBoghew,
@@ -160,10 +171,14 @@ wss.on('connection', (ws) => {
     }
 
     if (data.type === 'clearQRCode') {
-      const { userId } = data;
+      const uid = Number(data.userId);
+      if (!Number.isFinite(uid) || uid <= 0) {
+        ws.send(JSON.stringify({ type: 'error', message: '无效的用户ID' }));
+        return;
+      }
       wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN && client.userId === Number(userId)) {
-          client.send(JSON.stringify({ type: 'clearQRCode', userId: Number(userId) }));
+        if (client.readyState === WebSocket.OPEN && client.userId === uid) {
+          client.send(JSON.stringify({ type: 'clearQRCode', userId: uid }));
         }
       });
     }
@@ -215,6 +230,42 @@ wss.on('connection', (ws) => {
       }
     }
 
+    // ===== 按日期查询签到记录 =====
+    if (data.type === 'getAttendanceByDate') {
+      try {
+        const date = data.date || getLocalDate();
+        // 日期格式校验 (YYYY-MM-DD)
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          ws.send(JSON.stringify({ type: 'error', message: '日期格式不正确，应为 YYYY-MM-DD' }));
+          return;
+        }
+
+        const [records] = await db.query(
+          `SELECT ar.f_29yzstin559 AS userId, ar.f_0kiw0ulq188 AS status, ar.updated_at
+           FROM attendance_records ar
+           WHERE ar.f_n2a666hq2br = ?
+           ORDER BY ar.updated_at ASC`, [date]
+        );
+
+        const [totalUsers] = await db.query('SELECT COUNT(*) AS total FROM user_status');
+
+        // 统计各状态人数
+        const [dayStats] = await db.query(
+          `SELECT f_0kiw0ulq188 AS status, COUNT(*) AS count
+           FROM attendance_records WHERE f_n2a666hq2br = ?
+           GROUP BY f_0kiw0ulq188`, [date]
+        );
+
+        ws.send(JSON.stringify({
+          type: 'attendanceByDate',
+          data: { date, records, totalUsers: totalUsers[0].total, stats: dayStats }
+        }));
+      } catch (error) {
+        console.error('Date query error:', error);
+        ws.send(JSON.stringify({ type: 'error', message: '查询日期记录失败: ' + error.message }));
+      }
+    }
+
     // ===== CSV 导出签到记录 =====
     if (data.type === 'exportCSV') {
       try {
@@ -232,12 +283,23 @@ wss.on('connection', (ws) => {
         );
 
         const statusLabelMap = { present: '出勤', absent: '缺勤', late: '迟到', leave: '请假' };
+        // CSV 字段转义：防止逗号、引号、换行符破坏格式，同时防止 CSV 注入
+        function escapeCSV(val) {
+          if (val === null || val === undefined) return '';
+          const str = String(val);
+          // 以 =、+、-、@ 开头可能导致公式注入，前缀单引号
+          if (/^[=+\-@]/.test(str)) return "'" + str;
+          if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+            return '"' + str.replace(/"/g, '""') + '"';
+          }
+          return str;
+        }
         const BOM = '\uFEFF'; // UTF-8 BOM for Excel compatibility
         let csv = BOM + '日期,用户ID,签到状态,操作人ID,更新时间\n';
         records.forEach(r => {
           const statusLabel = statusLabelMap[r.status] || r.status;
           const updatedAt = r.updated_at ? new Date(r.updated_at).toISOString() : '';
-          csv += `${r.date},${r.userId},${statusLabel},${r.adminId || ''},${updatedAt}\n`;
+          csv += [r.date, r.userId, statusLabel, r.adminId || '', updatedAt].map(escapeCSV).join(',') + '\n';
         });
 
         ws.send(JSON.stringify({ type: 'csvData', csv, count: records.length }));

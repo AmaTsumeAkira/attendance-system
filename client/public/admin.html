@@ -227,6 +227,17 @@
     </div>
     <button id="statsBtn" style="margin-top:15px; background:#2ecc71; font-size:14px;">📊 查看统计</button>
     <div style="margin-top:15px; padding:12px; background:#f8f9fa; border-radius:8px;">
+      <div style="font-size:14px; color:#555; margin-bottom:10px;">📅 查询历史签到</div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center;">
+        <input type="date" id="queryDate" style="padding:8px; border:1px solid #dfe6e9; border-radius:6px; font-size:13px;">
+        <button id="queryDateBtn" style="background:#16a085; font-size:13px; padding:10px 16px;">查询</button>
+      </div>
+      <div id="dateResultPanel" style="display:none; margin-top:12px; text-align:left;">
+        <div id="dateSummary" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;"></div>
+        <ol id="dateRecordList" style="padding-left:20px; font-size:13px; color:#333; line-height:1.8; max-height:250px; overflow-y:auto;"></ol>
+      </div>
+    </div>
+    <div style="margin-top:15px; padding:12px; background:#f8f9fa; border-radius:8px;">
       <div style="font-size:14px; color:#555; margin-bottom:10px;">📥 导出签到记录</div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center;">
         <input type="date" id="exportStartDate" style="padding:8px; border:1px solid #dfe6e9; border-radius:6px; font-size:13px;">

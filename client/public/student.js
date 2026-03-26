@@ -82,7 +82,9 @@ function connectWebSocket() {
   if (ws) {
     ws.close();
   }
-  ws = new WebSocket(`wss://${wsHost}/ws`);
+  clearInterval(qrCountdownInterval); // 防止重连时创建多个interval
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${protocol}//${wsHost}/ws`);
 
   ws.onopen = () => {
     document.getElementById('status').textContent = '正在连接服务器...';
