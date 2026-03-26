@@ -211,6 +211,13 @@ function updateStatus(attendanceData) {
       break;
   }
 
-  statusDiv.innerHTML = `签到状态: ${status}<br>更新时间: ${updatedAt}`;
+  // 使用 textContent 防止 XSS，安全地显示签到信息
+  statusDiv.textContent = '';
+  const statusLine = document.createElement('div');
+  statusLine.textContent = `签到状态: ${status}`;
+  const timeLine = document.createElement('div');
+  timeLine.textContent = `更新时间: ${updatedAt}`;
+  statusDiv.appendChild(statusLine);
+  statusDiv.appendChild(timeLine);
   flashBackground(flashColor);
 }

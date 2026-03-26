@@ -199,11 +199,20 @@ function connectWebSocket() {
   }
   ws = new WebSocket(`wss://${wsHost}/ws`);
 
+  ws.onopen = () => {
+    resultDiv.textContent = 'WebSocket 已连接';
+  };
+
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
 
     if (data.type === 'attendanceStats') {
       renderStats(data.data);
+      return;
+    }
+
+    if (data.type === 'csvData') {
+      downloadCSV(data.csv, data.count);
       return;
     }
 
@@ -308,4 +317,53 @@ function renderStats(data) {
       return `<li>${medal} 用户 ${item.userId} — <b>${item.presentDays}</b> 天出勤</li>`;
     }).join('');
   }
+}
+
+// ===== CSV 导出功能 =====
+const exportBtn = document.getElementById('exportBtn');
+const exportStartDate = document.getElementById('exportStartDate');
+const exportEndDate = document.getElementById('exportEndDate');
+
+// 设置默认日期为今天
+const todayStr = new Date().toISOString().split('T')[0];
+exportStartDate.value = todayStr;
+exportEndDate.value = todayStr;
+
+exportBtn.onclick = () => {
+  if (ws.readyState !== WebSocket.OPEN) {
+    showToast('WebSocket 未连接，请稍后重试', 'error');
+    return;
+  }
+  const startDate = exportStartDate.value;
+  const endDate = exportEndDate.value;
+  if (!startDate || !endDate) {
+    showToast('请选择起止日期', 'error');
+    return;
+  }
+  if (startDate > endDate) {
+    showToast('起始日期不能晚于结束日期', 'error');
+    return;
+  }
+  exportBtn.textContent = '⏳ 导出中...';
+  exportBtn.disabled = true;
+  ws.send(JSON.stringify({ type: 'exportCSV', startDate, endDate }));
+};
+
+function downloadCSV(csvContent, count) {
+  exportBtn.textContent = '📥 导出签到记录 CSV';
+  exportBtn.disabled = false;
+  if (count === 0) {
+    showToast('所选日期范围内无签到记录', 'error');
+    return;
+  }
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `签到记录_${exportStartDate.value}_${exportEndDate.value}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`已导出 ${count} 条签到记录`, 'success');
 }

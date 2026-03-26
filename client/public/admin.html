@@ -226,6 +226,15 @@
       </div>
     </div>
     <button id="statsBtn" style="margin-top:15px; background:#2ecc71; font-size:14px;">📊 查看统计</button>
+    <div style="margin-top:15px; padding:12px; background:#f8f9fa; border-radius:8px;">
+      <div style="font-size:14px; color:#555; margin-bottom:10px;">📥 导出签到记录</div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center;">
+        <input type="date" id="exportStartDate" style="padding:8px; border:1px solid #dfe6e9; border-radius:6px; font-size:13px;">
+        <span style="color:#999;">至</span>
+        <input type="date" id="exportEndDate" style="padding:8px; border:1px solid #dfe6e9; border-radius:6px; font-size:13px;">
+      </div>
+      <button id="exportBtn" style="margin-top:10px; background:#8e44ad; font-size:13px; padding:10px 20px;">📥 导出签到记录 CSV</button>
+    </div>
   </div>
   <div id="toast" class="toast"></div>
   <script src="/jsQR.js"></script>
