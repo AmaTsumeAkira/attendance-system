@@ -10,7 +10,7 @@ const cameraSelect = document.getElementById('cameraSelect');
 const toast = document.getElementById('toast');
 
 const wsHost = window.location.host;
-const ws = new WebSocket(`wss://${wsHost}/ws`);
+let ws;
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 let scanning = false;
@@ -18,8 +18,7 @@ let paused = false;
 let stream = null;
 let cameras = [];
 let selectedCameraId = null;
-let lastScannedUserId = null;
-let lastScanTime = 0;
+const scanCooldownMap = new Map(); // Map<userId, timestamp> 防止重复扫描
 const REPEAT_SCAN_COOLDOWN = 10000; // 10秒冷却
 const QR_CODE_VALIDITY_PERIOD = 15000; // 15秒有效期
 
@@ -155,7 +154,8 @@ const scan = () => {
           return;
         }
 
-        if (lastScannedUserId === userId && (now - lastScanTime) < REPEAT_SCAN_COOLDOWN) {
+        const lastScanTime = scanCooldownMap.get(userId);
+        if (lastScanTime && (now - lastScanTime) < REPEAT_SCAN_COOLDOWN) {
           const remaining = Math.ceil((REPEAT_SCAN_COOLDOWN - (now - lastScanTime)) / 1000);
           showToast(`用户 ${name} 已在短时间内签到，请等待 ${remaining} 秒`, 'error');
           requestAnimationFrame(scan);
@@ -169,19 +169,20 @@ const scan = () => {
           'leave': '请假'
         };
         const statusText = statusMap[statusSelect.value];
-        ws.send(JSON.stringify({
-          type: 'submitAttendance',
-          userId,
-          adminId: Number(adminId),
-          status: statusSelect.value,
-          studentInfo: { userId, name },
-          timestamp
-        }));
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'submitAttendance',
+            userId,
+            adminId: Number(adminId),
+            status: statusSelect.value,
+            studentInfo: { userId, name },
+            timestamp
+          }));
+        }
         resultDiv.textContent = `签到成功: ${name} - ${statusText} (${new Date().toLocaleTimeString()})`;
         resultDiv.classList.add('success');
         playBeep(statusSelect.value);
-        lastScannedUserId = userId;
-        lastScanTime = now;
+        scanCooldownMap.set(userId, now);
       } catch (e) {
         resultDiv.textContent = '二维码解析失败，请重试';
         resultDiv.classList.add('error');
@@ -192,16 +193,40 @@ const scan = () => {
   requestAnimationFrame(scan);
 };
 
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  if (data.type === 'error') {
-    resultDiv.classList.remove('success', 'error');
-    resultDiv.textContent = `错误: ${data.message}`;
-    resultDiv.classList.add('error');
-  } else if (data.type === 'duplicateAttendance') {
-    showToast(`用户 ${data.studentInfo.name} 今日已签到`, 'error');
+function connectWebSocket() {
+  if (ws) {
+    ws.close();
   }
-};
+  ws = new WebSocket(`wss://${wsHost}/ws`);
+
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+
+    if (data.type === 'attendanceStats') {
+      renderStats(data.data);
+      return;
+    }
+
+    if (data.type === 'error') {
+      resultDiv.classList.remove('success', 'error');
+      resultDiv.textContent = `错误: ${data.message}`;
+      resultDiv.classList.add('error');
+    } else if (data.type === 'duplicateAttendance') {
+      showToast(`用户 ${data.studentInfo.name} 今日已签到`, 'error');
+    }
+  };
+
+  ws.onerror = () => {
+    resultDiv.textContent = '连接错误，正在尝试重连...';
+  };
+
+  ws.onclose = () => {
+    resultDiv.textContent = '连接已断开，正在尝试重连...';
+    setTimeout(connectWebSocket, 2000);
+  };
+}
+
+connectWebSocket();
 
 function showToast(message, type = 'default') {
   toast.textContent = message;
@@ -245,7 +270,9 @@ const statsPanel = document.getElementById('statsPanel');
 
 statsBtn.onclick = () => {
   if (statsPanel.style.display === 'none') {
-    ws.send(JSON.stringify({ type: 'getAttendanceStats' }));
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'getAttendanceStats' }));
+    }
     statsPanel.style.display = 'block';
     statsBtn.textContent = '📊 隐藏统计';
   } else {
@@ -256,20 +283,6 @@ statsBtn.onclick = () => {
 
 const statusLabelMap = { present: '出勤', absent: '缺勤', late: '迟到', leave: '请假' };
 const statusColorMap = { present: '#27ae60', absent: '#c0392b', late: '#e67e22', leave: '#2980b9' };
-
-// Extend ws.onmessage to handle stats
-const origOnMessage = ws.onmessage;
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-
-  if (data.type === 'attendanceStats') {
-    renderStats(data.data);
-    return;
-  }
-
-  // Call original handler
-  if (origOnMessage) origOnMessage.call(ws, event);
-};
 
 function renderStats(data) {
   const summaryDiv = document.getElementById('todaySummary');

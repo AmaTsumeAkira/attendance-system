@@ -19,10 +19,19 @@ const userId = urlParams.get('userid');
 const name = urlParams.get('name');
 const no = urlParams.get('no');
 
-document.getElementById('userInfo').innerHTML = `
-  <div><span>姓名:</span> ${name}</div>
-  <div><span>学号:</span> ${no}</div>
-`;
+const userInfoDiv = document.getElementById('userInfo');
+const nameSpan = document.createElement('div');
+const noSpan = document.createElement('div');
+const nameLabel = document.createElement('span');
+const noLabel = document.createElement('span');
+nameLabel.textContent = '姓名:';
+noLabel.textContent = '学号:';
+nameSpan.appendChild(nameLabel);
+nameSpan.appendChild(document.createTextNode(' ' + name));
+noSpan.appendChild(noLabel);
+noSpan.appendChild(document.createTextNode(' ' + no));
+userInfoDiv.appendChild(nameSpan);
+userInfoDiv.appendChild(noSpan);
 
 const wsHost = window.location.host;
 let ws;

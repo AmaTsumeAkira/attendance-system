@@ -29,7 +29,13 @@ function getLocalDate() {
 
 wss.on('connection', (ws) => {
   ws.on('message', async (message) => {
-    const data = JSON.parse(message);
+    let data;
+    try {
+      data = JSON.parse(message);
+    } catch (e) {
+      ws.send(JSON.stringify({ type: 'error', message: '无效的消息格式，无法解析 JSON' }));
+      return;
+    }
 
     if (data.type === 'checkAttendance') {
       ws.userId = Number(data.userId);
