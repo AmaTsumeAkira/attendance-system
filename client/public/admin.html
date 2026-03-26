@@ -170,29 +170,49 @@
         padding: 10px;
       }
       .container {
-        padding: 20px;
+        padding: 15px;
         max-width: 100%;
       }
       h1 {
-        font-size: 24px;
+        font-size: 22px;
+        margin-bottom: 15px;
       }
       .video-wrapper {
         padding-top: 100%; /* 手机上 1:1 */
-        margin-bottom: 15px;
+        margin-bottom: 12px;
       }
       .controls {
-        gap: 10px;
+        gap: 8px;
       }
       select, button {
         font-size: 14px;
+        padding: 10px 15px;
       }
       #result {
         font-size: 14px;
-        padding: 12px;
+        padding: 10px;
+        margin-top: 15px;
       }
       .toast {
         font-size: 14px;
         padding: 10px 20px;
+        max-width: 90%;
+      }
+      #statsPanel, div[style*="background:#f8f9fa"] {
+        padding: 10px !important;
+      }
+      #todaySummary span, #dateSummary span {
+        font-size: 12px !important;
+        padding: 4px 8px !important;
+      }
+      #leaderboardList, #dateRecordList {
+        font-size: 13px !important;
+      }
+      input[type="date"] {
+        font-size: 13px;
+        padding: 8px !important;
+        width: 100%;
+        max-width: 160px;
       }
     }
   </style>
@@ -219,6 +239,7 @@
     <div id="result"></div>
     <div id="statsPanel" style="display:none; margin-top:20px; text-align:left;">
       <h3 style="color:#2c3e50; margin-bottom:12px; font-size:18px;">📊 签到统计</h3>
+      <div id="attendanceRateBar" style="margin-bottom:15px; padding:10px; background:#f8f9fa; border-radius:8px;"></div>
       <div id="todaySummary" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:15px;"></div>
       <div id="leaderboard" style="margin-bottom:10px;">
         <h4 style="color:#555; font-size:15px; margin-bottom:8px;">🏆 出勤排行榜 (Top 10)</h4>

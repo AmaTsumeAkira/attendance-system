@@ -5,7 +5,7 @@ const db = require('./config/db');
 
 const app = express();
 const server = app.listen(3000, '0.0.0.0', () => console.log('Server running on port 3000'));
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ server, path: '/ws' });
 
 // ===== WebSocket 心跳保活 =====
 const HEARTBEAT_INTERVAL = 30000; // 30秒
@@ -22,6 +22,9 @@ const heartbeatTimer = setInterval(() => {
 }, HEARTBEAT_INTERVAL);
 
 wss.on('close', () => clearInterval(heartbeatTimer));
+wss.on('error', (err) => {
+  console.error('WebSocket server error:', err.message);
+});
 
 app.use(express.static(path.join(__dirname, '../client/public')));
 app.use(express.json());
@@ -47,6 +50,10 @@ wss.on('connection', (ws) => {
   // 心跳检测
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
+
+  ws.on('error', (err) => {
+    console.error('WebSocket client error:', err.message);
+  });
 
   ws.on('message', async (message) => {
     let data;
@@ -131,15 +138,19 @@ wss.on('connection', (ws) => {
 
         let isUpdate = false;
         if (existingAttendance.length > 0) {
-          if (existingAttendance[0].f_0kiw0ulq188 !== status) {
+          const oldRecordStatus = existingAttendance[0].f_0kiw0ulq188;
+          if (oldRecordStatus !== status) {
             await db.query(
               'UPDATE attendance_records SET f_0kiw0ulq188 = ?, created_by_id = ?, updated_at = ? WHERE id = ?',
               [status, numAdminId, currentTimeFormatted, existingAttendance[0].id]
             );
+            // 状态已更新，发送正常成功响应
+            ws.send(JSON.stringify({ type: 'attendanceUpdated', userId: numUserId, studentInfo, changed: true }));
+          } else {
+            // 状态未变化，提示管理员避免误操作
+            ws.send(JSON.stringify({ type: 'duplicateAttendance', userId: numUserId, studentInfo, message: `用户 ${studentInfo?.name || numUserId} 今日已签到（${status}），无需重复操作` }));
           }
-          // 无论状态是否变化，都通知管理员已存在记录（避免误以为未成功）
-          ws.send(JSON.stringify({ type: 'duplicateAttendance', userId: numUserId, studentInfo }));
-          isUpdate = true; // 仍然需要通知学生当前状态
+          isUpdate = true;
         } else {
           await db.query(
             'INSERT INTO attendance_records (f_n2a666hq2br, f_29yzstin559, f_0kiw0ulq188, created_by_id, updated_at) VALUES (?, ?, ?, ?, ?)',

@@ -37,6 +37,8 @@ const wsHost = window.location.host;
 let ws;
 let qrCountdownInterval;
 const REFRESH_INTERVAL = 10; // Refresh every 10 seconds
+let reconnectAttempts = 0;
+const MAX_RECONNECT_DELAY = 30000; // 最大重连间隔30秒
 
 function generateQRCodeData() {
   const timestamp = Date.now();
@@ -80,6 +82,7 @@ function startCountdown() {
 
 function connectWebSocket() {
   if (ws) {
+    ws.onclose = null; // 防止重连时触发多次 onclose
     ws.close();
   }
   clearInterval(qrCountdownInterval); // 防止重连时创建多个interval
@@ -87,6 +90,7 @@ function connectWebSocket() {
   ws = new WebSocket(`${protocol}//${wsHost}/ws`);
 
   ws.onopen = () => {
+    reconnectAttempts = 0; // 重置重连次数
     document.getElementById('status').textContent = '正在连接服务器...';
     ws.send(JSON.stringify({ type: 'checkAttendance', userId: Number(userId) }));
   };
@@ -143,7 +147,9 @@ function connectWebSocket() {
   ws.onclose = () => {
     document.getElementById('status').textContent = '连接已断开，正在尝试重连...';
     clearInterval(qrCountdownInterval);
-    setTimeout(connectWebSocket, 2000);
+    reconnectAttempts++;
+    const delay = Math.min(2000 * Math.pow(1.5, reconnectAttempts - 1), MAX_RECONNECT_DELAY);
+    setTimeout(connectWebSocket, delay);
   };
 }
 

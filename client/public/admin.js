@@ -21,6 +21,8 @@ let selectedCameraId = null;
 const scanCooldownMap = new Map(); // Map<userId, timestamp> 防止重复扫描
 const REPEAT_SCAN_COOLDOWN = 10000; // 10秒冷却
 const QR_CODE_VALIDITY_PERIOD = 15000; // 15秒有效期
+let reconnectAttempts = 0;
+const MAX_RECONNECT_DELAY = 30000; // 最大重连间隔30秒
 
 // 定期清理过期的冷却记录，防止内存泄漏
 setInterval(() => {
@@ -179,7 +181,7 @@ const scan = () => {
           'leave': '请假'
         };
         const statusText = statusMap[statusSelect.value];
-        if (ws.readyState === WebSocket.OPEN) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({
             type: 'submitAttendance',
             userId,
@@ -189,7 +191,7 @@ const scan = () => {
             timestamp
           }));
         }
-        resultDiv.textContent = `签到成功: ${name} - ${statusText} (${new Date().toLocaleTimeString()})`;
+        resultDiv.textContent = `签到提交: ${name} - ${statusText} (${new Date().toLocaleTimeString()})`;
         resultDiv.classList.add('success');
         playBeep(statusSelect.value);
         scanCooldownMap.set(userId, now);
@@ -205,12 +207,14 @@ const scan = () => {
 
 function connectWebSocket() {
   if (ws) {
+    ws.onclose = null;
     ws.close();
   }
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${protocol}//${wsHost}/ws`);
 
   ws.onopen = () => {
+    reconnectAttempts = 0;
     resultDiv.textContent = 'WebSocket 已连接';
   };
 
@@ -237,7 +241,9 @@ function connectWebSocket() {
       resultDiv.textContent = `错误: ${data.message}`;
       resultDiv.classList.add('error');
     } else if (data.type === 'duplicateAttendance') {
-      showToast(`用户 ${data.studentInfo.name} 今日已签到`, 'error');
+      showToast(data.message || `用户 ${data.studentInfo?.name || data.userId} 今日已签到`, 'error');
+    } else if (data.type === 'attendanceUpdated') {
+      showToast(`签到成功: ${data.studentInfo?.name || data.userId}`, 'success');
     }
   };
 
@@ -247,7 +253,9 @@ function connectWebSocket() {
 
   ws.onclose = () => {
     resultDiv.textContent = '连接已断开，正在尝试重连...';
-    setTimeout(connectWebSocket, 2000);
+    reconnectAttempts++;
+    const delay = Math.min(2000 * Math.pow(1.5, reconnectAttempts - 1), MAX_RECONNECT_DELAY);
+    setTimeout(connectWebSocket, delay);
   };
 }
 
@@ -312,10 +320,14 @@ const statusColorMap = { present: '#27ae60', absent: '#c0392b', late: '#e67e22',
 function renderStats(data) {
   const summaryDiv = document.getElementById('todaySummary');
   const listEl = document.getElementById('leaderboardList');
+  const rateBarDiv = document.getElementById('attendanceRateBar');
 
   // Today summary badges
   const countMap = {};
   data.stats.forEach(s => { countMap[s.status] = s.count; });
+  const signedCount = data.stats.reduce((sum, s) => sum + s.count, 0);
+  const rate = data.totalUsers > 0 ? Math.round((signedCount / data.totalUsers) * 100) : 0;
+
   let summaryHTML = `<span style="background:#ecf0f1;padding:6px 12px;border-radius:6px;font-size:14px;">总人数: <b>${data.totalUsers}</b></span>`;
   for (const [status, label] of Object.entries(statusLabelMap)) {
     const count = countMap[status] || 0;
@@ -323,6 +335,21 @@ function renderStats(data) {
     summaryHTML += `<span style="background:${color}20;color:${color};padding:6px 12px;border-radius:6px;font-size:14px;border:1px solid ${color}40;">${label}: <b>${count}</b></span>`;
   }
   summaryDiv.innerHTML = summaryHTML;
+
+  // 签到率进度条
+  if (rateBarDiv) {
+    const barColor = rate >= 90 ? '#27ae60' : rate >= 60 ? '#f39c12' : '#e74c3c';
+    rateBarDiv.innerHTML = `
+      <div style="display:flex; justify-content:space-between; font-size:13px; color:#555; margin-bottom:6px;">
+        <span>📋 签到进度</span>
+        <span><b style="color:${barColor};">${signedCount}</b>/${data.totalUsers} (${rate}%)</span>
+      </div>
+      <div style="background:#ecf0f1; border-radius:10px; height:22px; overflow:hidden; position:relative;">
+        <div style="background:linear-gradient(90deg, ${barColor}, ${barColor}dd); width:${rate}%; height:100%; border-radius:10px; transition:width 0.6s ease;"></div>
+        <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:12px; font-weight:600; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.3);">${rate}%</span>
+      </div>
+    `;
+  }
 
   // Leaderboard - 使用 DOM API 防止 XSS
   if (data.leaderboard.length === 0) {
