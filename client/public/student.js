@@ -253,16 +253,16 @@ function renderPersonalStats(data) {
 }
 
 function flashBackground(color) {
-  document.body.style.backgroundColor = color;
-  setTimeout(() => {
-    document.body.style.backgroundColor = '#f5f5f5';
-    setTimeout(() => {
-      document.body.style.backgroundColor = color;
-      setTimeout(() => {
-        document.body.style.backgroundColor = '#f5f5f5';
-      }, 200);
-    }, 200);
-  }, 200);
+  const timers = [];
+  const setColor = (c, delay) => {
+    timers.push(setTimeout(() => { document.body.style.backgroundColor = c; }, delay));
+  };
+  setColor(color, 0);
+  setColor('#f5f5f5', 200);
+  setColor(color, 400);
+  setColor('#f5f5f5', 600);
+  // Cleanup: 确保最终恢复默认背景色
+  timers.push(setTimeout(() => { document.body.style.backgroundColor = '#f5f5f5'; }, 800));
 }
 
 function updateStatus(attendanceData) {

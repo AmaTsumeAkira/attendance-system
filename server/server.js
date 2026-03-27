@@ -26,24 +26,42 @@ wss.on('error', (err) => {
   console.error('WebSocket server error:', err.message);
 });
 
+// ===== WebSocket 消息速率限制 =====
+const RATE_LIMIT_WINDOW = 1000; // 1 秒窗口
+const RATE_LIMIT_MAX = 10; // 每秒最多 10 条消息
+
+function checkRateLimit(ws) {
+  const now = Date.now();
+  if (!ws._rateLimitReset || now > ws._rateLimitReset) {
+    ws._rateLimitReset = now + RATE_LIMIT_WINDOW;
+    ws._rateLimitCount = 0;
+  }
+  ws._rateLimitCount++;
+  if (ws._rateLimitCount > RATE_LIMIT_MAX) {
+    ws.send(JSON.stringify({ type: 'error', message: '消息发送过于频繁，请稍后再试' }));
+    return false;
+  }
+  return true;
+}
+
 app.use(express.static(path.join(__dirname, '../client/public')));
 app.use(express.json());
 
 function formatLocalDateTime() {
-  return new Date().toLocaleString('zh-CN', { 
-    timeZone: 'Asia/Shanghai', 
-    year: 'numeric', 
-    month: '2-digit', 
-    day: '2-digit', 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    second: '2-digit', 
-    hour12: false 
+  return new Date().toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
   }).replace(/\//g, '-');
 }
 
 function getLocalDate() {
-  return formatLocalDateTime().split(' ')[0];
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
 }
 
 wss.on('connection', (ws) => {
@@ -56,6 +74,9 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('message', async (message) => {
+    // 速率限制检查
+    if (!checkRateLimit(ws)) return;
+
     let data;
     try {
       data = JSON.parse(message);
@@ -235,12 +256,16 @@ wss.on('connection', (ws) => {
            ORDER BY updated_at ASC`, [today]
         );
 
+        const signedCount = todayStats.reduce((sum, s) => sum + Number(s.count), 0);
+        const uncheckedCount = Number(totalUsers[0].total) - signedCount;
+
         ws.send(JSON.stringify({
           type: 'attendanceStats',
           data: {
             today,
             stats: todayStats,
             totalUsers: totalUsers[0].total,
+            uncheckedCount,
             leaderboard,
             todayDetails
           }

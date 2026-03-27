@@ -329,6 +329,10 @@ function renderStats(data) {
   const rate = data.totalUsers > 0 ? Math.round((signedCount / data.totalUsers) * 100) : 0;
 
   let summaryHTML = `<span style="background:#ecf0f1;padding:6px 12px;border-radius:6px;font-size:14px;">总人数: <b>${data.totalUsers}</b></span>`;
+  const unchecked = data.uncheckedCount !== undefined ? data.uncheckedCount : (data.totalUsers - signedCount);
+  if (unchecked > 0) {
+    summaryHTML += `<span style="background:#e74c3c15;color:#e74c3c;padding:6px 12px;border-radius:6px;font-size:14px;border:1px solid #e74c3c40;">⏳ 未签到: <b>${unchecked}</b></span>`;
+  }
   for (const [status, label] of Object.entries(statusLabelMap)) {
     const count = countMap[status] || 0;
     const color = statusColorMap[status];
@@ -403,6 +407,10 @@ function renderDateRecords(data) {
   const countMap = {};
   data.stats.forEach(s => { countMap[s.status] = s.count; });
   let summaryHTML = `<span style="background:#ecf0f1;padding:4px 10px;border-radius:6px;font-size:13px;">签到: <b>${data.records.length}</b>/${data.totalUsers}</span>`;
+  const dateUnchecked = data.totalUsers - data.records.length;
+  if (dateUnchecked > 0) {
+    summaryHTML += `<span style="background:#e74c3c15;color:#e74c3c;padding:4px 10px;border-radius:6px;font-size:13px;border:1px solid #e74c3c40;">⏳ 未签到: <b>${dateUnchecked}</b></span>`;
+  }
   for (const [status, label] of Object.entries(statusLabelMap)) {
     const count = countMap[status] || 0;
     if (count > 0) {
