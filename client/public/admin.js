@@ -24,6 +24,26 @@ const QR_CODE_VALIDITY_PERIOD = 15000; // 15秒有效期
 let reconnectAttempts = 0;
 const MAX_RECONNECT_DELAY = 30000; // 最大重连间隔30秒
 
+// ===== 连接状态指示器 =====
+function updateConnectionStatus(status) {
+  let indicator = document.getElementById('wsStatus');
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.id = 'wsStatus';
+    indicator.style.cssText = 'position:fixed;bottom:10px;left:10px;padding:5px 12px;border-radius:12px;font-size:12px;z-index:999;transition:all 0.3s;';
+    document.body.appendChild(indicator);
+  }
+  const states = {
+    connected: { bg: '#e8f5e9', color: '#27ae60', text: '🟢 已连接' },
+    reconnecting: { bg: '#fff3e0', color: '#f39c12', text: '🟡 重连中...' },
+    disconnected: { bg: '#ffebee', color: '#e74c3c', text: '🔴 已断开' }
+  };
+  const s = states[status] || states.disconnected;
+  indicator.style.background = s.bg;
+  indicator.style.color = s.color;
+  indicator.textContent = s.text;
+}
+
 // 定期清理过期的冷却记录，防止内存泄漏
 setInterval(() => {
   const now = Date.now();
@@ -215,6 +235,7 @@ function connectWebSocket() {
 
   ws.onopen = () => {
     reconnectAttempts = 0;
+    updateConnectionStatus('connected');
     resultDiv.textContent = 'WebSocket 已连接';
   };
 
@@ -248,10 +269,12 @@ function connectWebSocket() {
   };
 
   ws.onerror = () => {
+    updateConnectionStatus('disconnected');
     resultDiv.textContent = '连接错误，正在尝试重连...';
   };
 
   ws.onclose = () => {
+    updateConnectionStatus('reconnecting');
     resultDiv.textContent = '连接已断开，正在尝试重连...';
     reconnectAttempts++;
     const delay = Math.min(2000 * Math.pow(1.5, reconnectAttempts - 1), MAX_RECONNECT_DELAY);

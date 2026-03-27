@@ -35,10 +35,51 @@ userInfoDiv.appendChild(noSpan);
 
 const wsHost = window.location.host;
 let ws;
-let qrCountdownInterval;
+let qrCountdownInterval = null;
 const REFRESH_INTERVAL = 10; // Refresh every 10 seconds
 let reconnectAttempts = 0;
 const MAX_RECONNECT_DELAY = 30000; // 最大重连间隔30秒
+
+// ===== Toast 通知 =====
+function showToast(message, type = 'default') {
+  let toast = document.getElementById('studentToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'studentToast';
+    toast.style.cssText = 'position:fixed;top:15px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:8px;font-size:14px;z-index:1000;opacity:0;transition:opacity 0.3s;max-width:90%;text-align:center;pointer-events:none;';
+    document.body.appendChild(toast);
+  }
+  const colors = {
+    success: 'rgba(39,174,96,0.92);color:#fff',
+    error: 'rgba(192,57,43,0.92);color:#fff',
+    default: 'rgba(44,62,80,0.92);color:#fff'
+  };
+  toast.style.cssText = toast.style.cssText.replace(/background:[^;]+;/, '');
+  toast.setAttribute('style', toast.style.cssText + `background:${colors[type] || colors.default};`);
+  toast.textContent = message;
+  toast.style.opacity = '1';
+  setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+}
+
+// ===== 连接状态指示器 =====
+function updateConnectionStatus(status) {
+  let indicator = document.getElementById('wsStatus');
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.id = 'wsStatus';
+    indicator.style.cssText = 'position:fixed;bottom:10px;right:10px;padding:5px 12px;border-radius:12px;font-size:12px;z-index:999;transition:all 0.3s;';
+    document.body.appendChild(indicator);
+  }
+  const states = {
+    connected: { color: '#27ae60', bg: '#e8f5e9', text: '🟢 已连接' },
+    reconnecting: { color: '#f39c12', bg: '#fff3e0', text: '🟡 重连中...' },
+    disconnected: { color: '#e74c3c', bg: '#ffebee', text: '🔴 已断开' }
+  };
+  const s = states[status] || states.disconnected;
+  indicator.style.background = s.bg;
+  indicator.style.color = s.color;
+  indicator.textContent = s.text;
+}
 
 function generateQRCodeData() {
   const timestamp = Date.now();
@@ -73,6 +114,7 @@ function startCountdown() {
       timeLeft = REFRESH_INTERVAL;
       if (document.getElementById('status').textContent === '请出示二维码以考勤') {
         updateQRCode(); // Refresh QR code when countdown reaches 0
+        showToast('二维码已刷新，请出示新二维码', 'default');
       }
     }
   }, 1000);
@@ -91,6 +133,7 @@ function connectWebSocket() {
 
   ws.onopen = () => {
     reconnectAttempts = 0; // 重置重连次数
+    updateConnectionStatus('connected');
     document.getElementById('status').textContent = '正在连接服务器...';
     ws.send(JSON.stringify({ type: 'checkAttendance', userId: Number(userId) }));
   };
@@ -144,14 +187,18 @@ function connectWebSocket() {
   };
 
   ws.onerror = () => {
+    updateConnectionStatus('disconnected');
     document.getElementById('status').textContent = '连接错误，请刷新页面重试';
     document.getElementById('qrcode-container').classList.add('absent');
     clearInterval(qrCountdownInterval);
+    qrCountdownInterval = null;
   };
 
   ws.onclose = () => {
+    updateConnectionStatus('reconnecting');
     document.getElementById('status').textContent = '连接已断开，正在尝试重连...';
     clearInterval(qrCountdownInterval);
+    qrCountdownInterval = null;
     reconnectAttempts++;
     const delay = Math.min(2000 * Math.pow(1.5, reconnectAttempts - 1), MAX_RECONNECT_DELAY);
     setTimeout(connectWebSocket, delay);
