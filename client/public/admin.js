@@ -396,9 +396,11 @@ const statsPanel = document.getElementById('statsPanel');
 
 statsBtn.onclick = () => {
   if (statsPanel.style.display === 'none') {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'getAttendanceStats' }));
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      showToast('WebSocket 未连接，请稍后重试', 'error');
+      return;
     }
+    ws.send(JSON.stringify({ type: 'getAttendanceStats' }));
     statsPanel.style.display = 'block';
     statsBtn.textContent = '📊 隐藏统计';
   } else {
@@ -488,6 +490,20 @@ queryDateBtn.onclick = () => {
   ws.send(JSON.stringify({ type: 'getAttendanceByDate', date }));
 };
 
+// 日期记录搜索过滤
+const dateFilterInput = document.getElementById('dateFilterInput');
+dateFilterInput.addEventListener('input', () => {
+  const filter = dateFilterInput.value.trim();
+  if (!filter) {
+    renderDateRecordList(lastDateRecords);
+    return;
+  }
+  const filtered = lastDateRecords.filter(r => String(r.userId).includes(filter));
+  renderDateRecordList(filtered);
+});
+
+let lastDateRecords = [];
+
 function renderDateRecords(data) {
   queryDateBtn.textContent = '查询';
   queryDateBtn.disabled = false;
@@ -495,6 +511,9 @@ function renderDateRecords(data) {
   const summaryDiv = document.getElementById('dateSummary');
   const listEl = document.getElementById('dateRecordList');
   panel.style.display = 'block';
+
+  // 保存原始记录供筛选使用
+  lastDateRecords = data.records || [];
 
   // 统计摘要
   const countMap = {};
@@ -513,12 +532,18 @@ function renderDateRecords(data) {
   }
   summaryDiv.innerHTML = summaryHTML;
 
-  // 记录列表
-  if (data.records.length === 0) {
-    listEl.innerHTML = '<li style="color:#999;">该日期无签到记录</li>';
+  // 清除筛选并渲染完整列表
+  document.getElementById('dateFilterInput').value = '';
+  renderDateRecordList(lastDateRecords);
+}
+
+function renderDateRecordList(records) {
+  const listEl = document.getElementById('dateRecordList');
+  if (records.length === 0) {
+    listEl.innerHTML = '<li style="color:#999;">无匹配记录</li>';
   } else {
     listEl.innerHTML = '';
-    data.records.forEach(r => {
+    records.forEach(r => {
       const li = document.createElement('li');
       const label = statusLabelMap[r.status] || r.status;
       const time = r.updated_at || '';

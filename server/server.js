@@ -47,6 +47,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 // 服务端防重复签到：用户ID -> 上次提交时间戳
 const lastSubmitMap = new Map();
 const DEDUP_WINDOW = 10000; // 10秒
+const MAX_DEDUP_ENTRIES = 10000; // 最大条目数，防止内存泄漏
 
 // ===== WebSocket 心跳保活 =====
 const HEARTBEAT_INTERVAL = 30000; // 30秒
@@ -162,7 +163,16 @@ wss.on('connection', (ws) => {
         'SELECT * FROM attendance_records WHERE f_n2a666hq2br = ? AND f_29yzstin559 = ?',
         [getLocalDate(), uid]
       );
-      ws.send(JSON.stringify({ type: 'attendanceStatus', data: rows[0] || null }));
+      if (rows.length > 0) {
+        // 将内部字段名转为公开字段名，与 attendanceUpdated 格式一致
+        const row = rows[0];
+        ws.send(JSON.stringify({
+          type: 'attendanceStatus',
+          data: { status: row.f_0kiw0ulq188, updated_at: row.updated_at }
+        }));
+      } else {
+        ws.send(JSON.stringify({ type: 'attendanceStatus', data: null }));
+      }
     }
 
     if (data.type === 'submitAttendance') {
@@ -244,7 +254,12 @@ wss.on('connection', (ws) => {
           [today, numUserId]
         );
 
-        let isUpdate = false;
+        const attendanceDataPublic = {
+          userId: numUserId,
+          status: status,
+          updated_at: currentTimeFormatted
+        };
+
         if (existingAttendance.length > 0) {
           const oldRecordStatus = existingAttendance[0].f_0kiw0ulq188;
           if (oldRecordStatus !== status) {
@@ -252,35 +267,22 @@ wss.on('connection', (ws) => {
               'UPDATE attendance_records SET f_0kiw0ulq188 = ?, created_by_id = ?, updated_at = ? WHERE id = ?',
               [status, numAdminId, currentTimeFormatted, existingAttendance[0].id]
             );
-            // 状态已更新，发送正常成功响应
-            ws.send(JSON.stringify({ type: 'attendanceUpdated', userId: numUserId, studentInfo, changed: true }));
+            // 状态已更新，发送成功响应（含公开字段名，供学生端使用）
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'attendanceUpdated', data: attendanceDataPublic, studentInfo, changed: true }));
+            }
           } else {
             // 状态未变化，提示管理员避免误操作
             ws.send(JSON.stringify({ type: 'duplicateAttendance', userId: numUserId, studentInfo, message: `用户 ${studentInfo?.name || numUserId} 今日已签到（${status}），无需重复操作` }));
           }
-          isUpdate = true;
         } else {
           await db.query(
             'INSERT INTO attendance_records (f_n2a666hq2br, f_29yzstin559, f_0kiw0ulq188, created_by_id, updated_at) VALUES (?, ?, ?, ?, ?)',
             [today, numUserId, status, numAdminId, currentTimeFormatted]
           );
-          isUpdate = true;
-        }
-
-        if (isUpdate) {
-          // P2-1: 字段映射，广播前将内部字段名转为公开字段名
-          const attendanceDataPublic = {
-            userId: numUserId,
-            status: status,
-            updated_at: currentTimeFormatted
-          };
-          // P3-4: 只发给本人（ws 是提交者连接，其 userId 已在 checkAttendance 时设置）
+          // 新记录，发送成功响应（含公开字段名，供学生端使用）
           if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'attendanceUpdated',
-              data: attendanceDataPublic,
-              studentInfo
-            }));
+            ws.send(JSON.stringify({ type: 'attendanceUpdated', data: attendanceDataPublic, studentInfo }));
           }
         }
       } catch (error) {
@@ -514,6 +516,12 @@ setInterval(() => {
     if (now - ts > DEDUP_WINDOW * 2) {
       lastSubmitMap.delete(uid);
     }
+  }
+  // 超出大小限制时，清理最旧的条目
+  if (lastSubmitMap.size > MAX_DEDUP_ENTRIES) {
+    const entries = [...lastSubmitMap.entries()].sort((a, b) => a[1] - b[1]);
+    const toRemove = entries.slice(0, entries.length - MAX_DEDUP_ENTRIES);
+    toRemove.forEach(([uid]) => lastSubmitMap.delete(uid));
   }
 }, 60000);
 
