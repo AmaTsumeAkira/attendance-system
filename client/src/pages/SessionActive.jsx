@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getSession, endSession } from '../api/sessions'
-import { updateAttendance } from '../api/attendance'
+import { updateAttendance, manualUpdateAttendance, getAttendances } from '../api/attendance'
 import { useAuth } from '../hooks/useAuth'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useToast } from '../components/Toast'
+import Modal from '../components/Modal'
 import QRCodeDisplay from '../components/QRCodeDisplay'
 import StatusBadge from '../components/StatusBadge'
-import { Square, RefreshCw, UserCheck, Clock } from 'lucide-react'
+import { Square, RefreshCw, UserCheck, Clock, Edit3 } from 'lucide-react'
 import { format } from 'date-fns'
 
 export default function SessionActive() {
@@ -20,7 +21,20 @@ export default function SessionActive() {
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({ checkedIn: 0, total: 0, recentUsers: [] })
   const [qrToken, setQrToken] = useState('')
+  const [records, setRecords] = useState([])
+  const [modalOpen, setModalOpen] = useState(false)
+  const [selectedRecord, setSelectedRecord] = useState(null)
+  const [newStatus, setNewStatus] = useState('present')
+  const [remark, setRemark] = useState('')
   const intervalRef = useRef(null)
+
+  // Fetch attendance records for the session
+  const fetchRecords = async () => {
+    try {
+      const res = await getAttendances({ session_id: id, limit: 200 })
+      setRecords(res.data.data?.items || [])
+    } catch {}
+  }
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -30,6 +44,8 @@ export default function SessionActive() {
         setSession(s)
         setStats({ checkedIn: s.checked_in_count || 0, total: s.total_count || 0, recentUsers: s.recent_users || [] })
         if (s.qr_token) setQrToken(s.qr_token)
+      // Fetch attendance records
+      await fetchRecords()
       } catch { toast.addToast('获取会话信息失败', 'error') }
       finally { setLoading(false) }
     }
@@ -74,12 +90,25 @@ export default function SessionActive() {
     } catch (e) { toast.addToast(e.response?.data?.message || '操作失败', 'error') }
   }
 
-  const handleManualCheckIn = async (attendanceId) => {
+  const handleOpenModal = (record) => {
+    setSelectedRecord(record)
+    setNewStatus('present')
+    setRemark('')
+    setModalOpen(true)
+  }
+
+  const handleSubmitManualUpdate = async () => {
+    if (!selectedRecord) return
     try {
-      await updateAttendance(attendanceId, { status: 'present' })
+      await manualUpdateAttendance(selectedRecord.id, { status: newStatus, remark })
       toast.addToast('补签成功', 'success')
+      setModalOpen(false)
+      setSelectedRecord(null)
+      fetchRecords()
       send({ type: 'get_stats', payload: { sessionId: parseInt(id) } })
-    } catch (e) { toast.addToast(e.response?.data?.message || '补签失败', 'error') }
+    } catch (e) {
+      toast.addToast(e.response?.data?.message || '补签失败', 'error')
+    }
   }
 
   if (loading) return <div className="loading"><div className="spinner" /></div>
@@ -127,23 +156,34 @@ export default function SessionActive() {
           </div>
 
           <div className="card">
-            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>最近签到</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>签到记录</h3>
             <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-              {stats.recentUsers.length === 0 ? (
+              {records.length === 0 ? (
                 <div className="empty" style={{ padding: 20 }}>等待学生签到...</div>
               ) : (
-                stats.recentUsers.map((u, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', animation: 'slideIn .3s ease' }}>
+                records.map((r) => (
+                  <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', animation: 'slideIn .3s ease' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <UserCheck size={16} style={{ color: u.status === 'present' ? 'var(--success)' : 'var(--warning)' }} />
-                      <span style={{ fontWeight: 500 }}>{u.name || u.userId}</span>
+                      <UserCheck size={16} style={{ color: r.status === 'present' ? 'var(--success)' : r.status === 'late' ? 'var(--warning)' : 'var(--danger)' }} />
+                      <span style={{ fontWeight: 500 }}>{r.real_name || r.user_id}</span>
+                      {r.student_id && <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{r.student_id}</span>}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <StatusBadge status={u.status} />
-                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                        <Clock size={12} style={{ verticalAlign: 'middle', marginRight: 2 }} />
-                        {u.time ? format(new Date(u.time), 'HH:mm:ss') : ''}
-                      </span>
+                      <StatusBadge status={r.status} />
+                      {r.check_in_time && (
+                        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          <Clock size={12} style={{ verticalAlign: 'middle', marginRight: 2 }} />
+                          {format(new Date(r.check_in_time), 'HH:mm:ss')}
+                        </span>
+                      )}
+                      <button
+                        className="btn-icon btn-secondary"
+                        title="修改状态"
+                        onClick={() => handleOpenModal(r)}
+                        style={{ padding: 4 }}
+                      >
+                        <Edit3 size={14} />
+                      </button>
                     </div>
                   </div>
                 ))
@@ -152,6 +192,42 @@ export default function SessionActive() {
           </div>
         </div>
       </div>
+
+      {/* Manual Update Modal */}
+      {modalOpen && (
+        <Modal
+          title="补签 / 修改状态"
+          onClose={() => setModalOpen(false)}
+          footer={
+            <>
+              <button className="btn-secondary" onClick={() => setModalOpen(false)}>取消</button>
+              <button className="btn-primary" onClick={handleSubmitManualUpdate}>确认</button>
+            </>
+          }
+        >
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 4 }}>学生</div>
+            <div style={{ fontWeight: 500 }}>{selectedRecord?.real_name} {selectedRecord?.student_id ? `(${selectedRecord.student_id})` : ''}</div>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 4 }}>当前状态</div>
+            <StatusBadge status={selectedRecord?.status} />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 4, display: 'block' }}>新状态</label>
+            <select value={newStatus} onChange={e => setNewStatus(e.target.value)} style={{ width: '100%', padding: '8px 12px' }}>
+              <option value="present">出勤</option>
+              <option value="late">迟到</option>
+              <option value="absent">缺勤</option>
+              <option value="leave">请假</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 4, display: 'block' }}>备注</label>
+            <input type="text" value={remark} onChange={e => setRemark(e.target.value)} placeholder="补签原因..." style={{ width: '100%', padding: '8px 12px' }} />
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

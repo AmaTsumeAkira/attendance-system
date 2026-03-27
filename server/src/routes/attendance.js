@@ -84,6 +84,29 @@ router.get('/', (req, res) => {
   } catch (err) { res.status(500).json(errorRes(500, err.message)); }
 });
 
+// PUT /attendances/:id/manual-update  (补签)
+router.put('/:id/manual-update', requireRole('super_admin', 'admin', 'teacher'), (req, res) => {
+  try {
+    const db = getDb();
+    const record = db.prepare('SELECT * FROM attendance_records WHERE id = ?').get(req.params.id);
+    if (!record) return res.status(404).json(errorRes(404, '记录不存在'));
+    const { status, remark } = req.body;
+    if (!status) return res.status(400).json(errorRes(400, '请提供状态'));
+    const oldStatus = record.status;
+    const checkInTime = (status === 'present' || status === 'late') ? (record.check_in_time || nowStr()) : null;
+    db.prepare('UPDATE attendance_records SET status=?, remark=?, check_in_time=?, check_in_method=?, updated_at=? WHERE id=?').run(
+      status, remark ?? record.remark, checkInTime, checkInTime ? 'manual' : '', nowStr(), req.params.id
+    );
+    // Log to audit_logs
+    db.prepare('INSERT INTO audit_logs (user_id, action, target_type, target_id, detail) VALUES (?, ?, ?, ?, ?)').run(
+      req.user.id, 'manual_update', 'attendance', req.params.id,
+      JSON.stringify({ oldStatus, newStatus: status, remark })
+    );
+    const updated = db.prepare('SELECT * FROM attendance_records WHERE id = ?').get(req.params.id);
+    res.json(successRes(updated, '补签成功'));
+  } catch (err) { res.status(500).json(errorRes(500, err.message)); }
+});
+
 // PUT /attendances/:id
 router.put('/:id', requireRole('super_admin', 'admin', 'teacher'), (req, res) => {
   try {

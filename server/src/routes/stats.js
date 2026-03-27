@@ -101,6 +101,30 @@ router.get('/course/:id', (req, res) => {
   } catch (err) { res.status(500).json(errorRes(500, err.message)); }
 });
 
+// GET /stats/ranking?month=2026-03
+router.get('/ranking', (req, res) => {
+  try {
+    const db = getDb();
+    const month = req.query.month || todayStr().slice(0, 7);
+    const items = db.prepare(`
+      SELECT u.id as userId, u.real_name as realName, u.student_id as studentId,
+        SUM(CASE WHEN ar.status IN ('present','late') THEN 1 ELSE 0 END) as presentDays,
+        COUNT(ar.id) as totalDays,
+        CASE WHEN COUNT(ar.id) > 0
+          THEN ROUND(CAST(SUM(CASE WHEN ar.status IN ('present','late') THEN 1 ELSE 0 END) AS REAL) / COUNT(ar.id) * 100, 1)
+          ELSE 0 END as rate
+      FROM users u
+      JOIN attendance_records ar ON u.id = ar.user_id
+      JOIN sessions s ON ar.session_id = s.id
+      WHERE u.role = 'student' AND u.status = 'active'
+        AND strftime('%Y-%m', s.session_date) = ?
+      GROUP BY u.id
+      ORDER BY rate DESC, presentDays DESC
+    `).all(month);
+    res.json(successRes({ items }));
+  } catch (err) { res.status(500).json(errorRes(500, err.message)); }
+});
+
 // GET /stats/student/:id
 router.get('/student/:id', (req, res) => {
   try {

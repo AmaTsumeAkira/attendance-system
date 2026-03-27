@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { getCourses } from '../api/courses'
 import { getClasses } from '../api/classes'
 import { getUsers } from '../api/users'
-import { getClassStats, getCourseStats, getStudentStats } from '../api/stats'
+import { getClassStats, getCourseStats, getStudentStats, getRanking } from '../api/stats'
 import { useToast } from '../components/Toast'
 import DatePicker from '../components/DatePicker'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts'
@@ -16,6 +16,7 @@ export default function Stats() {
   const [startDate, setStartDate] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'))
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [stats, setStats] = useState(null)
+  const [rankingData, setRankingData] = useState([])
   const [loading, setLoading] = useState(false)
   const [courses, setCourses] = useState([])
   const [classList, setClassList] = useState([])
@@ -29,6 +30,20 @@ export default function Stats() {
   }, [])
 
   useEffect(() => {
+    if (dimension === 'ranking') {
+      const fetchRanking = async () => {
+        setLoading(true)
+        try {
+          const month = startDate.slice(0, 7)
+          const res = await getRanking({ month })
+          setRankingData(res.data.data?.items || [])
+          setStats(null)
+        } catch { toast.addToast('获取排行数据失败', 'error') }
+        finally { setLoading(false) }
+      }
+      fetchRanking()
+      return
+    }
     if (!targetId) { setStats(null); return }
     const fetch = async () => {
       setLoading(true)
@@ -74,16 +89,19 @@ export default function Stats() {
       </div>
 
       <div className="filter-bar">
-        <select value={dimension} onChange={e => { setDimension(e.target.value); setTargetId(''); setStats(null) }}>
+        <select value={dimension} onChange={e => { setDimension(e.target.value); setTargetId(''); setStats(null); setRankingData([]) }}>
           <option value="class">按班级</option>
           <option value="course">按课程</option>
           <option value="student">按学生</option>
+          <option value="ranking">出勤率排行</option>
         </select>
-        <select value={targetId} onChange={e => setTargetId(e.target.value)}>
-          <option value="">请选择</option>
-          {targetList.map(t => <option key={t.id} value={t.id}>{t[targetLabel] || t.real_name || t.username}</option>)}
-        </select>
-        {dimension !== 'student' && (
+        {dimension !== 'ranking' && (
+          <select value={targetId} onChange={e => setTargetId(e.target.value)}>
+            <option value="">请选择</option>
+            {targetList.map(t => <option key={t.id} value={t.id}>{t[targetLabel] || t.real_name || t.username}</option>)}
+          </select>
+        )}
+        {dimension !== 'student' && dimension !== 'ranking' && (
           <>
             <DatePicker value={startDate} onChange={setStartDate} />
             <DatePicker value={endDate} onChange={setEndDate} />
@@ -92,11 +110,66 @@ export default function Stats() {
         {dimension === 'student' && (
           <input type="month" value={startDate.slice(0, 7)} onChange={e => setStartDate(e.target.value + '-01')} />
         )}
+        {dimension === 'ranking' && (
+          <input type="month" value={startDate.slice(0, 7)} onChange={e => setStartDate(e.target.value + '-01')} />
+        )}
       </div>
 
       {loading && <div className="loading"><div className="spinner" /></div>}
 
-      {stats && !loading && (
+      {/* Ranking Bar Chart */}
+      {dimension === 'ranking' && rankingData.length > 0 && !loading && (
+        <div className="card">
+          <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>
+            出勤率排行榜 (Top {Math.min(rankingData.length, 10)})
+          </h3>
+          <ResponsiveContainer width="100%" height={Math.max(300, Math.min(rankingData.length, 10) * 40)}>
+            <BarChart data={rankingData.slice(0, 10)} layout="vertical" margin={{ left: 80, right: 30 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis type="number" domain={[0, 100]} unit="%" stroke="var(--text-secondary)" fontSize={12} />
+              <YAxis type="category" dataKey="realName" stroke="var(--text-secondary)" fontSize={12} width={70} />
+              <Tooltip
+                contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }}
+                formatter={(value, name) => [`${value}%`, '出勤率']}
+                labelFormatter={(label) => label}
+              />
+              <Bar dataKey="rate" fill="var(--primary)" radius={[0, 4, 4, 0]} label={{ position: 'right', formatter: (v) => `${v}%`, fontSize: 12 }} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div style={{ marginTop: 16 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                  <th style={{ textAlign: 'left', padding: '8px' }}>排名</th>
+                  <th style={{ textAlign: 'left', padding: '8px' }}>姓名</th>
+                  <th style={{ textAlign: 'left', padding: '8px' }}>学号</th>
+                  <th style={{ textAlign: 'right', padding: '8px' }}>出勤天数</th>
+                  <th style={{ textAlign: 'right', padding: '8px' }}>总天数</th>
+                  <th style={{ textAlign: 'right', padding: '8px' }}>出勤率</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankingData.slice(0, 10).map((r, i) => (
+                  <tr key={r.userId} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '8px', fontWeight: 600, color: i < 3 ? 'var(--primary)' : 'inherit' }}>{i + 1}</td>
+                    <td style={{ padding: '8px' }}>{r.realName}</td>
+                    <td style={{ padding: '8px', color: 'var(--text-secondary)' }}>{r.studentId}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{r.presentDays}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>{r.totalDays}</td>
+                    <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600, color: r.rate >= 90 ? 'var(--success)' : r.rate >= 70 ? 'var(--warning)' : 'var(--danger)' }}>{r.rate}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {dimension === 'ranking' && rankingData.length === 0 && !loading && (
+        <div className="card"><div className="empty">该月份暂无出勤数据</div></div>
+      )}
+
+      {stats && !loading && dimension !== 'ranking' && (
         <>
           <div className="stats-grid">
             <div className="stat-card">
@@ -172,7 +245,7 @@ export default function Stats() {
         </>
       )}
 
-      {!stats && !loading && <div className="card"><div className="empty">请选择维度和目标查看统计</div></div>}
+      {!stats && !loading && dimension !== 'ranking' && <div className="card"><div className="empty">请选择维度和目标查看统计</div></div>}
     </div>
   )
 }
