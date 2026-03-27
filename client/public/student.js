@@ -101,6 +101,11 @@ function connectWebSocket() {
     const qrcodeContainer = document.getElementById('qrcode-container');
     const statusText = document.getElementById('status-text');
 
+    if (data.type === 'personalStats') {
+      renderPersonalStats(data.data);
+      return;
+    }
+
     if (data.type === 'attendanceStatus') {
       if (!data.data) {
         statusDiv.textContent = '正在生成二维码...';
@@ -154,6 +159,98 @@ function connectWebSocket() {
 }
 
 connectWebSocket();
+
+// ===== 个人出勤统计 =====
+let statsYear = new Date().getFullYear();
+let statsMonth = new Date().getMonth() + 1;
+const statsToggle = document.getElementById('statsToggle');
+const personalStatsPanel = document.getElementById('personalStats');
+const statusLabelMap = { present: '出勤', absent: '缺勤', late: '迟到', leave: '请假' };
+const statusColorMap = { present: '#27ae60', absent: '#c0392b', late: '#e67e22', leave: '#2980b9' };
+const statusEmojiMap = { present: '✅', absent: '❌', late: '⏰', leave: '📝' };
+
+statsToggle.onclick = () => {
+  if (personalStatsPanel.style.display === 'none') {
+    personalStatsPanel.style.display = 'block';
+    statsToggle.textContent = '📊 隐藏统计';
+    requestPersonalStats();
+  } else {
+    personalStatsPanel.style.display = 'none';
+    statsToggle.textContent = '📊 查看出勤统计';
+  }
+};
+
+document.getElementById('prevMonth').onclick = () => {
+  statsMonth--;
+  if (statsMonth < 1) { statsMonth = 12; statsYear--; }
+  requestPersonalStats();
+};
+
+document.getElementById('nextMonth').onclick = () => {
+  statsMonth++;
+  if (statsMonth > 12) { statsMonth = 1; statsYear++; }
+  requestPersonalStats();
+};
+
+function requestPersonalStats() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'getPersonalStats', userId: Number(userId), year: statsYear, month: statsMonth }));
+  }
+}
+
+function renderPersonalStats(data) {
+  document.getElementById('statsMonthLabel').textContent = `${data.year}年${data.month}月`;
+
+  // Summary badges
+  const summaryDiv = document.getElementById('statsSummary');
+  let html = `<span style="background:#ecf0f1;padding:5px 10px;border-radius:6px;font-size:13px;">签到: <b>${data.signedDays}</b>/${data.totalDays}天</span>`;
+  for (const [status, label] of Object.entries(statusLabelMap)) {
+    const count = data.statusCounts[status] || 0;
+    const color = statusColorMap[status];
+    html += `<span style="background:${color}15;color:${color};padding:5px 10px;border-radius:6px;font-size:13px;border:1px solid ${color}30;">${statusEmojiMap[status]} ${label}: <b>${count}</b></span>`;
+  }
+  summaryDiv.innerHTML = html;
+
+  // Rate bar
+  const rateDiv = document.getElementById('attendanceRateBar');
+  const rate = data.attendanceRate;
+  const barColor = rate >= 90 ? '#27ae60' : rate >= 60 ? '#f39c12' : '#e74c3c';
+  rateDiv.innerHTML = `
+    <div style="display:flex; justify-content:space-between; font-size:12px; color:#555; margin-bottom:4px;">
+      <span>📋 本月出勤率</span>
+      <span style="font-weight:600; color:${barColor};">${rate}%</span>
+    </div>
+    <div style="background:#ecf0f1; border-radius:10px; height:20px; overflow:hidden; position:relative;">
+      <div style="background:linear-gradient(90deg, ${barColor}, ${barColor}cc); width:${rate}%; height:100%; border-radius:10px; transition:width 0.5s ease;"></div>
+    </div>
+  `;
+
+  // Calendar grid
+  const calendarDiv = document.getElementById('monthlyCalendar');
+  const recordMap = {};
+  data.records.forEach(r => {
+    const day = r.date.split('-')[2].replace(/^0/, '');
+    recordMap[day] = r.status;
+  });
+
+  const firstDay = new Date(data.year, data.month - 1, 1).getDay(); // 0=Sun
+  let calHTML = '<div style="display:grid; grid-template-columns:repeat(7,1fr); gap:2px; text-align:center;">';
+  ['日','一','二','三','四','五','六'].forEach(d => {
+    calHTML += `<div style="font-size:11px; color:#999; padding:3px 0;">${d}</div>`;
+  });
+  for (let i = 0; i < firstDay; i++) calHTML += '<div></div>';
+  for (let d = 1; d <= data.totalDays; d++) {
+    const status = recordMap[String(d)];
+    let bg = '#f5f5f5', fg = '#333';
+    if (status) {
+      bg = statusColorMap[status] + '25';
+      fg = statusColorMap[status];
+    }
+    calHTML += `<div style="background:${bg}; color:${fg}; border-radius:4px; padding:4px 0; font-size:12px; font-weight:${status ? '600' : '400'};" title="${status ? statusLabelMap[status] : ''}">${d}</div>`;
+  }
+  calHTML += '</div>';
+  calendarDiv.innerHTML = calHTML;
+}
 
 function flashBackground(color) {
   document.body.style.backgroundColor = color;

@@ -123,6 +123,16 @@ wss.on('connection', (ws) => {
           return;
         }
 
+        // 验证管理员 ID 存在
+        const [adminExists] = await db.query(
+          'SELECT id FROM user_status WHERE id = ?',
+          [numAdminId]
+        );
+        if (adminExists.length === 0) {
+          ws.send(JSON.stringify({ type: 'error', message: `管理员 ${numAdminId} 不存在` }));
+          return;
+        }
+
         const oldStatus = existing[0].f_k1x5891pt2x;
         if (oldStatus !== status) {
           await db.query(
@@ -317,6 +327,64 @@ wss.on('connection', (ws) => {
       } catch (error) {
         console.error('CSV export error:', error);
         ws.send(JSON.stringify({ type: 'error', message: '导出 CSV 失败: ' + error.message }));
+      }
+    }
+
+    // ===== 个人月度出勤统计 =====
+    if (data.type === 'getPersonalStats') {
+      const uid = Number(data.userId);
+      if (!Number.isFinite(uid) || uid <= 0) {
+        ws.send(JSON.stringify({ type: 'error', message: '无效的用户ID' }));
+        return;
+      }
+      try {
+        const now = new Date();
+        const year = data.year ? Number(data.year) : now.getFullYear();
+        const month = data.month ? Number(data.month) : now.getMonth() + 1;
+        if (!Number.isFinite(year) || year < 2000 || year > 2100 || !Number.isFinite(month) || month < 1 || month > 12) {
+          ws.send(JSON.stringify({ type: 'error', message: '无效的年月参数' }));
+          return;
+        }
+        const monthStr = String(month).padStart(2, '0');
+        const startDate = `${year}-${monthStr}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const endDate = `${year}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
+
+        const [records] = await db.query(
+          `SELECT f_n2a666hq2br AS date, f_0kiw0ulq188 AS status, updated_at
+           FROM attendance_records
+           WHERE f_29yzstin559 = ? AND f_n2a666hq2br BETWEEN ? AND ?
+           ORDER BY f_n2a666hq2br ASC`,
+          [uid, startDate, endDate]
+        );
+
+        // 统计各状态天数
+        const statusCounts = { present: 0, absent: 0, late: 0, leave: 0 };
+        records.forEach(r => {
+          if (statusCounts.hasOwnProperty(r.status)) {
+            statusCounts[r.status]++;
+          }
+        });
+        const totalDays = lastDay;
+        const signedDays = records.length;
+        const attendanceRate = totalDays > 0 ? Math.round((statusCounts.present / totalDays) * 100) : 0;
+
+        ws.send(JSON.stringify({
+          type: 'personalStats',
+          data: {
+            userId: uid,
+            year,
+            month,
+            totalDays,
+            signedDays,
+            attendanceRate,
+            statusCounts,
+            records
+          }
+        }));
+      } catch (error) {
+        console.error('Personal stats error:', error);
+        ws.send(JSON.stringify({ type: 'error', message: '获取个人统计失败: ' + error.message }));
       }
     }
   });

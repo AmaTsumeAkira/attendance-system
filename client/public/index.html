@@ -164,6 +164,19 @@
       <div id="qrCountdown"></div>
     </div>
     <div id="status"></div>
+    <button id="statsToggle" style="margin-top:15px; background:#3498db; color:#fff; border:none; border-radius:8px; padding:10px 20px; font-size:14px; cursor:pointer; width:100%;">📊 查看出勤统计</button>
+    <div id="personalStats" style="display:none; margin-top:15px; text-align:left; padding:15px; background:#fafafa; border-radius:10px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <span style="font-size:15px; font-weight:600; color:#2c3e50;">📅 <span id="statsMonthLabel"></span> 出勤统计</span>
+        <div style="display:flex; gap:6px;">
+          <button id="prevMonth" style="background:#ecf0f1; border:none; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:13px;">◀</button>
+          <button id="nextMonth" style="background:#ecf0f1; border:none; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:13px;">▶</button>
+        </div>
+      </div>
+      <div id="statsSummary" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;"></div>
+      <div id="attendanceRateBar" style="margin-bottom:12px;"></div>
+      <div id="monthlyCalendar" style="font-size:13px; color:#333; line-height:1.8;"></div>
+    </div>
   </div>
   <script src="/qrcode.min.js"></script>
   <script src="/student.js"></script>
