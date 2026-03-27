@@ -16,6 +16,9 @@ import Leaves from './pages/Leaves'
 import MyAttendance from './pages/MyAttendance'
 import Schedules from './pages/Schedules'
 import Profile from './pages/Profile'
+import Notifications from './pages/Notifications'
+import Semesters from './pages/Semesters'
+import Dashboard2 from './pages/Dashboard2'
 
 export default function App() {
   const { loading } = useAuth()
@@ -25,6 +28,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/dashboard-screen" element={<Dashboard2 />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/users" element={<ProtectedRoute roles={['super_admin', 'admin']}><Users /></ProtectedRoute>} />
@@ -38,6 +42,8 @@ export default function App() {
         <Route path="/check-in" element={<ProtectedRoute roles={['student']}><StudentCheckIn /></ProtectedRoute>} />
         <Route path="/my-attendance" element={<ProtectedRoute roles={['student']}><MyAttendance /></ProtectedRoute>} />
         <Route path="/leaves" element={<Leaves />} />
+        <Route path="/notifications" element={<Notifications />} />
+        <Route path="/semesters" element={<ProtectedRoute roles={['super_admin', 'admin']}><Semesters /></ProtectedRoute>} />
         <Route path="/profile" element={<Profile />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

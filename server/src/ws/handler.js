@@ -6,6 +6,18 @@ import { nowStr } from '../utils/helpers.js';
 const sessionSubs = new Map();
 // ws -> Set<sessionId>
 const wsSubs = new Map();
+// user connections: userId -> Set<ws>
+const userConns = new Map();
+
+// Push notification to a specific user via WebSocket
+export function pushNotificationToUser(userId, notification) {
+  const conns = userConns.get(userId);
+  if (!conns) return;
+  const msg = JSON.stringify({ type: 'notification', payload: notification });
+  for (const ws of conns) {
+    if (ws.readyState === 1) ws.send(msg);
+  }
+}
 
 export function handleWsConnection(ws, req) {
   // Auth via query param
@@ -23,6 +35,10 @@ export function handleWsConnection(ws, req) {
   ws.user = user;
   ws.isAlive = true;
   wsSubs.set(ws, new Set());
+
+  // Track user connections for notification push
+  if (!userConns.has(user.id)) userConns.set(user.id, new Set());
+  userConns.get(user.id).add(ws);
 
   // Update online status
   try {
@@ -50,6 +66,9 @@ export function handleWsConnection(ws, req) {
       }
     }
     wsSubs.delete(ws);
+    // Clean up user connection tracking
+    const uc = userConns.get(user.id);
+    if (uc) { uc.delete(ws); if (!uc.size) userConns.delete(user.id); }
     try {
       const db = getDb();
       db.prepare('UPDATE user_status SET online=0, last_seen=? WHERE user_id=?').run(nowStr(), user.id);

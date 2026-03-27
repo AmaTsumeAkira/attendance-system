@@ -158,6 +158,15 @@ insertConfig.run('late_threshold', '10', t);
 
 console.log('  ✅ System config created');
 
+// --- Semesters ---
+const insertSemester = db.prepare('INSERT INTO semesters (name, start_date, end_date, is_current, created_at) VALUES (?,?,?,?,?)');
+insertSemester.run('2023-2024-1', '2023-09-01', '2024-01-15', 0, t);
+insertSemester.run('2023-2024-2', '2024-02-20', '2024-07-05', 0, t);
+insertSemester.run('2024-2025-1', '2024-09-01', '2025-01-15', 1, t);
+insertSemester.run('2024-2025-2', '2025-02-24', '2025-07-04', 0, t);
+
+console.log('  ✅ Semesters created');
+
 console.log('\n🎉 Seed complete!');
 console.log('\n📋 Accounts:');
 console.log('   admin / admin123 (super_admin)');

@@ -17,6 +17,9 @@ import attendanceRoutes from './routes/attendance.js';
 import statsRoutes from './routes/stats.js';
 import leaveRoutes from './routes/leaves.js';
 import scheduleRoutes from './routes/schedules.js';
+import notificationRoutes from './routes/notifications.js';
+import semesterRoutes from './routes/semesters.js';
+import { pushNotificationToUser } from './ws/handler.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,6 +42,8 @@ app.use('/api/v1/attendances', attendanceRoutes);
 app.use('/api/v1/stats', statsRoutes);
 app.use('/api/v1/leaves', leaveRoutes);
 app.use('/api/v1/schedules', scheduleRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/semesters', semesterRoutes);
 
 // Health check
 app.get('/api/v1/health', (req, res) => {
@@ -113,6 +118,21 @@ function startCronJobs() {
           db.prepare("UPDATE sessions SET status = 'ended', updated_at = datetime('now','localtime') WHERE id = ?").run(s.id);
           // Mark unchecked students as absent
           db.prepare("UPDATE attendance_records SET status = 'absent', updated_at = datetime('now','localtime') WHERE session_id = ? AND status = 'absent' AND check_in_time IS NULL").run(s.id);
+          // Send absence notifications
+          const absentStudents = db.prepare(`
+            SELECT ar.user_id, c.name as course_name
+            FROM attendance_records ar
+            JOIN courses c ON ar.course_id = c.id
+            WHERE ar.session_id = ? AND ar.status = 'absent' AND ar.check_in_time IS NULL
+          `).all(s.id);
+          for (const st of absentStudents) {
+            const nr = db.prepare(`
+              INSERT INTO notifications (user_id, type, title, content, link, created_at)
+              VALUES (?, 'absence_alert', ?, ?, '/my-attendance', datetime('now','localtime'))
+            `).run(st.user_id, '缺勤通知', `您在「${st.course_name}」课程中被标记为缺勤`, `/my-attendance`);
+            const n = db.prepare('SELECT * FROM notifications WHERE id = ?').get(nr.lastInsertRowid);
+            pushNotificationToUser(st.user_id, n);
+          }
         }
       }
     } catch (err) {

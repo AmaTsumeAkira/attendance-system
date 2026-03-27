@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getDb } from '../db.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { successRes, errorRes, paginatedRes, nowStr, todayStr, uuid } from '../utils/helpers.js';
+import { pushNotificationToUser } from '../ws/handler.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -124,6 +125,16 @@ router.post('/:id/start', requireRole('super_admin', 'admin', 'teacher'), (req, 
       }
     });
     txn();
+    // Send checkin reminder notifications to all students in the class
+    const course = db.prepare('SELECT name FROM courses WHERE id = ?').get(s.course_id);
+    for (const st of students) {
+      const nr = db.prepare(`
+        INSERT INTO notifications (user_id, type, title, content, link, created_at)
+        VALUES (?, 'checkin_reminder', ?, ?, '/check-in', ?)
+      `).run(st.user_id, '签到提醒', `「${course?.name || ''}」课程签到已开始，请及时签到`, t);
+      const n = db.prepare('SELECT * FROM notifications WHERE id = ?').get(nr.lastInsertRowid);
+      pushNotificationToUser(st.user_id, n);
+    }
     res.json(successRes({ qr_token: qrToken, expires_at: expiresAt }, '签到已开始'));
   } catch (err) { res.status(500).json(errorRes(500, err.message)); }
 });

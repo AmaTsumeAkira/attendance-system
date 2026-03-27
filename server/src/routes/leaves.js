@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getDb } from '../db.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { successRes, errorRes, paginatedRes, nowStr } from '../utils/helpers.js';
+import { pushNotificationToUser } from '../ws/handler.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -85,6 +86,15 @@ router.put('/:id/review', requireRole('super_admin', 'admin', 'teacher'), (req, 
         leave.id, t, leave.session_id, leave.user_id
       );
     }
+    // Send notification to student
+    const statusText = status === 'approved' ? '已批准' : '已拒绝';
+    const nr = db.prepare(`
+      INSERT INTO notifications (user_id, type, title, content, link, created_at)
+      VALUES (?, 'leave_result', ?, ?, '/leaves', ?)
+    `).run(leave.user_id, `请假审批${statusText}`, `您的请假申请已${statusText}${comment ? '：' + comment : ''}`, t);
+    const n = db.prepare('SELECT * FROM notifications WHERE id = ?').get(nr.lastInsertRowid);
+    pushNotificationToUser(leave.user_id, n);
+
     const updated = db.prepare('SELECT * FROM leave_requests WHERE id = ?').get(req.params.id);
     res.json(successRes(updated, '审批完成'));
   } catch (err) { res.status(500).json(errorRes(500, err.message)); }
