@@ -13,6 +13,47 @@ const wsHost = window.location.host;
 let ws;
 
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+// ===== 密码输入 Modal =====
+const passwordModal = document.getElementById('passwordModal');
+const passwordModalInput = document.getElementById('passwordModalInput');
+const passwordModalError = document.getElementById('passwordModalError');
+const passwordModalConfirm = document.getElementById('passwordModalConfirm');
+const passwordModalCancel = document.getElementById('passwordModalCancel');
+const passwordModalTitle = document.getElementById('passwordModalTitle');
+
+function showPasswordModal(title, errorMessage) {
+  return new Promise((resolve) => {
+    passwordModalTitle.textContent = title || '🔐 管理员认证';
+    passwordModalError.textContent = errorMessage || '';
+    passwordModalInput.value = '';
+    passwordModal.style.display = 'flex';
+    setTimeout(() => passwordModalInput.focus(), 100);
+
+    function cleanup() {
+      passwordModal.style.display = 'none';
+      passwordModalConfirm.removeEventListener('click', onConfirm);
+      passwordModalCancel.removeEventListener('click', onCancel);
+      passwordModalInput.removeEventListener('keydown', onKeyDown);
+    }
+    function onConfirm() {
+      const val = passwordModalInput.value;
+      cleanup();
+      resolve(val || null);
+    }
+    function onCancel() {
+      cleanup();
+      resolve(null);
+    }
+    function onKeyDown(e) {
+      if (e.key === 'Enter') onConfirm();
+      if (e.key === 'Escape') onCancel();
+    }
+    passwordModalConfirm.addEventListener('click', onConfirm);
+    passwordModalCancel.addEventListener('click', onCancel);
+    passwordModalInput.addEventListener('keydown', onKeyDown);
+  });
+}
 let scanning = false;
 let paused = false;
 let stream = null;
@@ -233,11 +274,11 @@ function connectWebSocket() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${protocol}//${wsHost}/ws`);
 
-  ws.onopen = () => {
+  ws.onopen = async () => {
     reconnectAttempts = 0;
     updateConnectionStatus('connected');
     // 管理员认证
-    const password = prompt('请输入管理员密码:');
+    const password = await showPasswordModal('🔐 管理员认证');
     if (password) {
       ws.send(JSON.stringify({ type: 'auth', password }));
     } else {
@@ -246,7 +287,7 @@ function connectWebSocket() {
     }
   };
 
-  ws.onmessage = (event) => {
+  ws.onmessage = async (event) => {
     let data;
     try {
       data = JSON.parse(event.data);
@@ -264,7 +305,7 @@ function connectWebSocket() {
       resultDiv.textContent = '认证失败: ' + data.message;
       resultDiv.classList.add('error');
       // 重新弹出密码输入
-      const retryPassword = prompt('密码错误，请重新输入管理员密码:');
+      const retryPassword = await showPasswordModal('🔐 密码错误，请重新输入', '密码错误，请重试');
       if (retryPassword) {
         ws.send(JSON.stringify({ type: 'auth', password: retryPassword }));
       }

@@ -6,9 +6,43 @@ const db = require('./config/db');
 
 const app = express();
 const server = app.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log('Server running on port', process.env.PORT || 3000));
-const wss = new WebSocket.Server({ server, path: '/ws', maxPayload: 64 * 1024 });
+const wss = new WebSocket.Server({
+  server,
+  path: '/ws',
+  maxPayload: 64 * 1024,
+  verifyClient: (info, cb) => {
+    const origin = info.req.headers.origin || '';
+    const allowedOrigins = [
+      `http://localhost:${process.env.PORT || 3000}`,
+      `https://localhost:${process.env.PORT || 3000}`,
+      `http://127.0.0.1:${process.env.PORT || 3000}`,
+      `https://127.0.0.1:${process.env.PORT || 3000}`
+    ];
+    // 允许服务端自身域名
+    if (info.req.headers.host) {
+      allowedOrigins.push(`http://${info.req.headers.host}`);
+      allowedOrigins.push(`https://${info.req.headers.host}`);
+    }
+    // 允许通过 SERVER_ORIGIN 环境变量额外指定的域名
+    if (process.env.SERVER_ORIGIN) {
+      allowedOrigins.push(process.env.SERVER_ORIGIN);
+    }
+    // 无 Origin（非浏览器客户端如 curl/Node.js）放行
+    if (!origin || allowedOrigins.some(a => origin === a)) {
+      cb(true);
+    } else {
+      console.warn(`WebSocket 连接被拒绝，Origin: ${origin}`);
+      cb(false, 403, 'Forbidden');
+    }
+  }
+});
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+if (!process.env.ADMIN_PASSWORD) {
+  console.error('❌ 缺少必要的环境变量: ADMIN_PASSWORD');
+  console.error('请在 .env 文件中配置该变量，参考 .env.example');
+  process.exit(1);
+}
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 // 服务端防重复签到：用户ID -> 上次提交时间戳
 const lastSubmitMap = new Map();
@@ -361,6 +395,16 @@ wss.on('connection', (ws) => {
         const { startDate, endDate } = data;
         const start = startDate || getLocalDate();
         const end = endDate || getLocalDate();
+        // 日期格式校验
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(start) || !dateRegex.test(end)) {
+          ws.send(JSON.stringify({ type: 'error', message: '日期格式不正确，应为 YYYY-MM-DD' }));
+          return;
+        }
+        if (start > end) {
+          ws.send(JSON.stringify({ type: 'error', message: '起始日期不能晚于结束日期' }));
+          return;
+        }
 
         const [records] = await db.query(
           `SELECT ar.f_n2a666hq2br AS date, ar.f_29yzstin559 AS userId, 
@@ -403,6 +447,11 @@ wss.on('connection', (ws) => {
       const uid = Number(data.userId);
       if (!Number.isFinite(uid) || uid <= 0) {
         ws.send(JSON.stringify({ type: 'error', message: '无效的用户ID' }));
+        return;
+      }
+      // 认证检查：管理员可查所有人，非管理员只能查自己
+      if (!ws.isAuthenticated && ws.userId !== uid) {
+        ws.send(JSON.stringify({ type: 'error', message: '无权查询他人出勤数据' }));
         return;
       }
       try {

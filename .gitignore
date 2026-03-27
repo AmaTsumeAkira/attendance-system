@@ -1,1 +1,6 @@
 server/node_modules/
+
+# SSL 证书和密钥
+*.pem
+*.key
+*.crt
