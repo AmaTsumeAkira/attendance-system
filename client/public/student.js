@@ -1,3 +1,20 @@
+// ===== 深色模式 =====
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const newTheme = isDark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  document.getElementById('themeToggle').textContent = newTheme === 'dark' ? '☀️' : '🌙';
+}
+// 初始化主题
+(function initTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.getElementById('themeToggle').textContent = '☀️';
+  }
+})();
+
 function updateTime() {
   const now = new Date();
   const timeString = now.toLocaleString('zh-CN', {
@@ -264,7 +281,7 @@ function renderPersonalStats(data) {
 
   // Summary badges
   const summaryDiv = document.getElementById('statsSummary');
-  let html = `<span style="background:#ecf0f1;padding:5px 10px;border-radius:6px;font-size:13px;">签到: <b>${data.signedDays}</b>/${data.totalDays}天</span>`;
+  let html = `<span style="background:var(--bg-subtle);padding:5px 10px;border-radius:6px;font-size:13px;color:var(--text-primary);">签到: <b>${data.signedDays}</b>/${data.totalDays}天</span>`;
   for (const [status, label] of Object.entries(statusLabelMap)) {
     const count = data.statusCounts[status] || 0;
     const color = statusColorMap[status];
@@ -277,11 +294,11 @@ function renderPersonalStats(data) {
   const rate = data.attendanceRate;
   const barColor = rate >= 90 ? '#27ae60' : rate >= 60 ? '#f39c12' : '#e74c3c';
   rateDiv.innerHTML = `
-    <div style="display:flex; justify-content:space-between; font-size:12px; color:#555; margin-bottom:4px;">
+    <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-secondary); margin-bottom:4px;">
       <span>📋 本月出勤率</span>
       <span style="font-weight:600; color:${barColor};">${rate}%</span>
     </div>
-    <div style="background:#ecf0f1; border-radius:10px; height:20px; overflow:hidden; position:relative;">
+    <div style="background:var(--border-color); border-radius:10px; height:20px; overflow:hidden; position:relative;">
       <div style="background:linear-gradient(90deg, ${barColor}, ${barColor}cc); width:${rate}%; height:100%; border-radius:10px; transition:width 0.5s ease;"></div>
     </div>
   `;
@@ -297,12 +314,12 @@ function renderPersonalStats(data) {
   const firstDay = new Date(data.year, data.month - 1, 1).getDay(); // 0=Sun
   let calHTML = '<div style="display:grid; grid-template-columns:repeat(7,1fr); gap:2px; text-align:center;">';
   ['日','一','二','三','四','五','六'].forEach(d => {
-    calHTML += `<div style="font-size:11px; color:#999; padding:3px 0;">${d}</div>`;
+    calHTML += `<div style="font-size:11px; color:var(--text-hint); padding:3px 0;">${d}</div>`;
   });
   for (let i = 0; i < firstDay; i++) calHTML += '<div></div>';
   for (let d = 1; d <= data.totalDays; d++) {
     const status = recordMap[String(d)];
-    let bg = '#f5f5f5', fg = '#333';
+    let bg = 'var(--bg-subtle)', fg = 'var(--text-primary)';
     if (status) {
       bg = statusColorMap[status] + '25';
       fg = statusColorMap[status];

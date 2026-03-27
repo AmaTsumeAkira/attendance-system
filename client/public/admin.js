@@ -1,3 +1,20 @@
+// ===== 深色模式 =====
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const newTheme = isDark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  document.getElementById('themeToggle').textContent = newTheme === 'dark' ? '☀️' : '🌙';
+}
+// 初始化主题
+(function initTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.getElementById('themeToggle').textContent = '☀️';
+  }
+})();
+
 const urlParams = new URLSearchParams(window.location.search);
 const adminId = urlParams.get('userid');
 const adminName = urlParams.get('name');
@@ -423,7 +440,7 @@ function renderStats(data) {
   const signedCount = data.stats.reduce((sum, s) => sum + s.count, 0);
   const rate = data.totalUsers > 0 ? Math.round((signedCount / data.totalUsers) * 100) : 0;
 
-  let summaryHTML = `<span style="background:#ecf0f1;padding:6px 12px;border-radius:6px;font-size:14px;">总人数: <b>${data.totalUsers}</b></span>`;
+  let summaryHTML = `<span style="background:var(--bg-subtle);padding:6px 12px;border-radius:6px;font-size:14px;color:var(--text-primary);">总人数: <b>${data.totalUsers}</b></span>`;
   const unchecked = data.uncheckedCount !== undefined ? data.uncheckedCount : (data.totalUsers - signedCount);
   if (unchecked > 0) {
     summaryHTML += `<span style="background:#e74c3c15;color:#e74c3c;padding:6px 12px;border-radius:6px;font-size:14px;border:1px solid #e74c3c40;">⏳ 未签到: <b>${unchecked}</b></span>`;
@@ -439,11 +456,11 @@ function renderStats(data) {
   if (rateBarDiv) {
     const barColor = rate >= 90 ? '#27ae60' : rate >= 60 ? '#f39c12' : '#e74c3c';
     rateBarDiv.innerHTML = `
-      <div style="display:flex; justify-content:space-between; font-size:13px; color:#555; margin-bottom:6px;">
+      <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--text-secondary); margin-bottom:6px;">
         <span>📋 签到进度</span>
         <span><b style="color:${barColor};">${signedCount}</b>/${data.totalUsers} (${rate}%)</span>
       </div>
-      <div style="background:#ecf0f1; border-radius:10px; height:22px; overflow:hidden; position:relative;">
+      <div style="background:var(--border-color); border-radius:10px; height:22px; overflow:hidden; position:relative;">
         <div style="background:linear-gradient(90deg, ${barColor}, ${barColor}dd); width:${rate}%; height:100%; border-radius:10px; transition:width 0.6s ease;"></div>
         <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:12px; font-weight:600; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.3);">${rate}%</span>
       </div>
@@ -452,7 +469,7 @@ function renderStats(data) {
 
   // Leaderboard - 使用 DOM API 防止 XSS
   if (data.leaderboard.length === 0) {
-    listEl.innerHTML = '<li style="color:#999;">暂无数据</li>';
+    listEl.innerHTML = '<li style="color:var(--text-hint);">暂无数据</li>';
   } else {
     listEl.innerHTML = '';
     data.leaderboard.forEach((item, i) => {
@@ -518,7 +535,7 @@ function renderDateRecords(data) {
   // 统计摘要
   const countMap = {};
   data.stats.forEach(s => { countMap[s.status] = s.count; });
-  let summaryHTML = `<span style="background:#ecf0f1;padding:4px 10px;border-radius:6px;font-size:13px;">签到: <b>${data.records.length}</b>/${data.totalUsers}</span>`;
+  let summaryHTML = `<span style="background:var(--bg-subtle);padding:4px 10px;border-radius:6px;font-size:13px;color:var(--text-primary);">签到: <b>${data.records.length}</b>/${data.totalUsers}</span>`;
   const dateUnchecked = data.totalUsers - data.records.length;
   if (dateUnchecked > 0) {
     summaryHTML += `<span style="background:#e74c3c15;color:#e74c3c;padding:4px 10px;border-radius:6px;font-size:13px;border:1px solid #e74c3c40;">⏳ 未签到: <b>${dateUnchecked}</b></span>`;
@@ -540,7 +557,7 @@ function renderDateRecords(data) {
 function renderDateRecordList(records) {
   const listEl = document.getElementById('dateRecordList');
   if (records.length === 0) {
-    listEl.innerHTML = '<li style="color:#999;">无匹配记录</li>';
+    listEl.innerHTML = '<li style="color:var(--text-hint);">无匹配记录</li>';
   } else {
     listEl.innerHTML = '';
     records.forEach(r => {

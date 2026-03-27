@@ -267,10 +267,16 @@ wss.on('connection', (ws) => {
               'UPDATE attendance_records SET f_0kiw0ulq188 = ?, created_by_id = ?, updated_at = ? WHERE id = ?',
               [status, numAdminId, currentTimeFormatted, existingAttendance[0].id]
             );
-            // 状态已更新，发送成功响应（含公开字段名，供学生端使用）
+            // 状态已更新，发送成功响应给管理员
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ type: 'attendanceUpdated', data: attendanceDataPublic, studentInfo, changed: true }));
             }
+            // 广播给学生端，实现实时状态更新
+            wss.clients.forEach(client => {
+              if (client.readyState === WebSocket.OPEN && client.userId === numUserId) {
+                client.send(JSON.stringify({ type: 'attendanceUpdated', data: attendanceDataPublic }));
+              }
+            });
           } else {
             // 状态未变化，提示管理员避免误操作
             ws.send(JSON.stringify({ type: 'duplicateAttendance', userId: numUserId, studentInfo, message: `用户 ${studentInfo?.name || numUserId} 今日已签到（${status}），无需重复操作` }));
@@ -280,10 +286,16 @@ wss.on('connection', (ws) => {
             'INSERT INTO attendance_records (f_n2a666hq2br, f_29yzstin559, f_0kiw0ulq188, created_by_id, updated_at) VALUES (?, ?, ?, ?, ?)',
             [today, numUserId, status, numAdminId, currentTimeFormatted]
           );
-          // 新记录，发送成功响应（含公开字段名，供学生端使用）
+          // 新记录，发送成功响应给管理员
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'attendanceUpdated', data: attendanceDataPublic, studentInfo }));
           }
+          // 广播给学生端，实现实时状态更新
+          wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN && client.userId === numUserId) {
+              client.send(JSON.stringify({ type: 'attendanceUpdated', data: attendanceDataPublic }));
+            }
+          });
         }
       } catch (error) {
         console.error('Database error:', error);

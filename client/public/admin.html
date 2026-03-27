@@ -5,6 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>负责人扫码</title>
   <style>
+    :root {
+      --bg-body: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+      --bg-card: #ffffff;
+      --bg-subtle: #f8f9fa;
+      --text-primary: #2c3e50;
+      --text-secondary: #555;
+      --text-hint: #999;
+      --border-color: #dfe6e9;
+      --shadow-color: rgba(0, 0, 0, 0.1);
+      --toast-bg: rgba(44, 62, 80, 0.9);
+      --modal-overlay: rgba(0,0,0,0.5);
+      --modal-bg: #fff;
+    }
+    [data-theme="dark"] {
+      --bg-body: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      --bg-card: #16213e;
+      --bg-subtle: #1a1a3e;
+      --text-primary: #e0e0e0;
+      --text-secondary: #b0bec5;
+      --text-hint: #78909c;
+      --border-color: #2a3a5e;
+      --shadow-color: rgba(0, 0, 0, 0.3);
+      --toast-bg: rgba(20, 30, 50, 0.95);
+      --modal-overlay: rgba(0,0,0,0.7);
+      --modal-bg: #16213e;
+    }
     * {
       margin: 0;
       padding: 0;
@@ -12,25 +38,28 @@
     }
     body {
       font-family: 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
-      background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+      background: var(--bg-body);
       display: flex;
       justify-content: center;
       align-items: center;
       min-height: 100vh;
       padding: 20px;
+      color: var(--text-primary);
+      transition: background 0.3s ease, color 0.3s ease;
     }
     .container {
-      background: #ffffff;
+      background: var(--bg-card);
       border-radius: 20px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 10px 30px var(--shadow-color);
       padding: 25px;
       width: 100%;
       max-width: 450px;
       text-align: center;
       overflow: hidden;
+      transition: background 0.3s ease, box-shadow 0.3s ease;
     }
     h1 {
-      color: #2c3e50;
+      color: var(--text-primary);
       font-size: 28px;
       font-weight: 600;
       margin-bottom: 20px;
@@ -39,11 +68,11 @@
       position: relative;
       width: 100%;
       padding-top: 75%; /* 默认 4:3 */
-      background: #f1f3f5;
+      background: var(--bg-subtle);
       border-radius: 12px;
       overflow: hidden;
       margin-bottom: 20px;
-      border: 2px solid #dfe6e9;
+      border: 2px solid var(--border-color);
     }
     video {
       position: absolute;
@@ -80,11 +109,11 @@
     }
     select {
       padding: 12px;
-      border: 1px solid #dfe6e9;
+      border: 1px solid var(--border-color);
       border-radius: 8px;
       font-size: 16px;
-      background: #f8f9fa;
-      color: #2c3e50;
+      background: var(--bg-subtle);
+      color: var(--text-primary);
       cursor: pointer;
       outline: none;
       transition: border-color 0.3s, box-shadow 0.3s;
@@ -161,8 +190,36 @@
       color: #ffffff;
     }
     .toast.default {
-      background: rgba(44, 62, 80, 0.9);
+      background: var(--toast-bg);
       color: #ffffff;
+    }
+
+    #themeToggle {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 18px;
+      cursor: pointer;
+      z-index: 100;
+      transition: all 0.3s ease;
+    }
+    #themeToggle:hover { opacity: 0.8; }
+
+    [data-theme="dark"] #passwordModal > div {
+      background: var(--modal-bg);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    }
+    [data-theme="dark"] #passwordModal > div h3,
+    [data-theme="dark"] #passwordModal > div input {
+      color: var(--text-primary);
+      background: var(--bg-subtle);
+    }
+    [data-theme="dark"] #passwordModal {
+      background: var(--modal-overlay);
     }
 
     @media (max-width: 480px) {
@@ -218,6 +275,7 @@
   </style>
 </head>
 <body>
+  <button id="themeToggle" onclick="toggleTheme()">🌙</button>
   <div class="container">
     <h1>负责人扫码签到</h1>
     <div class="video-wrapper">
@@ -238,45 +296,45 @@
     </div>
     <div id="result"></div>
     <div id="statsPanel" style="display:none; margin-top:20px; text-align:left;">
-      <h3 style="color:#2c3e50; margin-bottom:12px; font-size:18px;">📊 签到统计</h3>
-      <div id="attendanceRateBar" style="margin-bottom:15px; padding:10px; background:#f8f9fa; border-radius:8px;"></div>
+      <h3 style="color:var(--text-primary); margin-bottom:12px; font-size:18px;">📊 签到统计</h3>
+      <div id="attendanceRateBar" style="margin-bottom:15px; padding:10px; background:var(--bg-subtle); border-radius:8px;"></div>
       <div id="todaySummary" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:15px;"></div>
       <div id="leaderboard" style="margin-bottom:10px;">
-        <h4 style="color:#555; font-size:15px; margin-bottom:8px;">🏆 出勤排行榜 (Top 10)</h4>
-        <ol id="leaderboardList" style="padding-left:20px; font-size:14px; color:#333; line-height:1.8;"></ol>
+        <h4 style="color:var(--text-secondary); font-size:15px; margin-bottom:8px;">🏆 出勤排行榜 (Top 10)</h4>
+        <ol id="leaderboardList" style="padding-left:20px; font-size:14px; color:var(--text-primary); line-height:1.8;"></ol>
       </div>
     </div>
     <button id="statsBtn" style="margin-top:15px; background:#2ecc71; font-size:14px;">📊 查看统计</button>
-    <div style="margin-top:15px; padding:12px; background:#f8f9fa; border-radius:8px;">
-      <div style="font-size:14px; color:#555; margin-bottom:10px;">📅 查询历史签到</div>
+    <div style="margin-top:15px; padding:12px; background:var(--bg-subtle); border-radius:8px;">
+      <div style="font-size:14px; color:var(--text-secondary); margin-bottom:10px;">📅 查询历史签到</div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center;">
-        <input type="date" id="queryDate" style="padding:8px; border:1px solid #dfe6e9; border-radius:6px; font-size:13px;">
+        <input type="date" id="queryDate" style="padding:8px; border:1px solid var(--border-color); border-radius:6px; font-size:13px; background:var(--bg-subtle); color:var(--text-primary);">
         <button id="queryDateBtn" style="background:#16a085; font-size:13px; padding:10px 16px;">查询</button>
       </div>
       <div id="dateResultPanel" style="display:none; margin-top:12px; text-align:left;">
         <div id="dateSummary" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;"></div>
-        <input type="text" id="dateFilterInput" placeholder="🔍 按用户ID筛选..." style="width:100%; padding:8px; border:1px solid #dfe6e9; border-radius:6px; font-size:13px; margin-bottom:8px; box-sizing:border-box;">
-        <ol id="dateRecordList" style="padding-left:20px; font-size:13px; color:#333; line-height:1.8; max-height:250px; overflow-y:auto;"></ol>
+        <input type="text" id="dateFilterInput" placeholder="🔍 按用户ID筛选..." style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:6px; font-size:13px; margin-bottom:8px; box-sizing:border-box; background:var(--bg-subtle); color:var(--text-primary);">
+        <ol id="dateRecordList" style="padding-left:20px; font-size:13px; color:var(--text-primary); line-height:1.8; max-height:250px; overflow-y:auto;"></ol>
       </div>
     </div>
-    <div style="margin-top:15px; padding:12px; background:#f8f9fa; border-radius:8px;">
-      <div style="font-size:14px; color:#555; margin-bottom:10px;">📥 导出签到记录</div>
+    <div style="margin-top:15px; padding:12px; background:var(--bg-subtle); border-radius:8px;">
+      <div style="font-size:14px; color:var(--text-secondary); margin-bottom:10px;">📥 导出签到记录</div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center;">
-        <input type="date" id="exportStartDate" style="padding:8px; border:1px solid #dfe6e9; border-radius:6px; font-size:13px;">
-        <span style="color:#999;">至</span>
-        <input type="date" id="exportEndDate" style="padding:8px; border:1px solid #dfe6e9; border-radius:6px; font-size:13px;">
+        <input type="date" id="exportStartDate" style="padding:8px; border:1px solid var(--border-color); border-radius:6px; font-size:13px; background:var(--bg-subtle); color:var(--text-primary);">
+        <span style="color:var(--text-hint);">至</span>
+        <input type="date" id="exportEndDate" style="padding:8px; border:1px solid var(--border-color); border-radius:6px; font-size:13px; background:var(--bg-subtle); color:var(--text-primary);">
       </div>
       <button id="exportBtn" style="margin-top:10px; background:#8e44ad; font-size:13px; padding:10px 20px;">📥 导出签到记录 CSV</button>
     </div>
   </div>
   <div id="toast" class="toast"></div>
   <!-- 密码输入 Modal -->
-  <div id="passwordModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; justify-content:center; align-items:center;">
-    <div style="background:#fff; border-radius:16px; padding:30px; width:90%; max-width:360px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.2);">
-      <h3 id="passwordModalTitle" style="color:#2c3e50; margin-bottom:16px; font-size:20px;">🔐 管理员认证</h3>
+  <div id="passwordModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:var(--modal-overlay); z-index:2000; justify-content:center; align-items:center;">
+    <div style="background:var(--modal-bg); border-radius:16px; padding:30px; width:90%; max-width:360px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.2);">
+      <h3 id="passwordModalTitle" style="color:var(--text-primary); margin-bottom:16px; font-size:20px;">🔐 管理员认证</h3>
       <input type="password" id="passwordModalInput" placeholder="请输入管理员密码"
-        style="width:100%; padding:12px; border:1px solid #dfe6e9; border-radius:8px; font-size:16px; outline:none; box-sizing:border-box;"
-        onfocus="this.style.borderColor='#3498db'" onblur="this.style.borderColor='#dfe6e9'">
+        style="width:100%; padding:12px; border:1px solid var(--border-color); border-radius:8px; font-size:16px; outline:none; box-sizing:border-box; background:var(--bg-subtle); color:var(--text-primary);"
+        onfocus="this.style.borderColor='#3498db'" onblur="this.style.borderColor='var(--border-color)'">
       <div id="passwordModalError" style="color:#c0392b; font-size:13px; margin-top:8px; min-height:20px;"></div>
       <div style="display:flex; gap:10px; margin-top:18px;">
         <button id="passwordModalCancel" style="flex:1; background:#95a5a6; padding:12px; border:none; border-radius:8px; color:#fff; font-size:15px; cursor:pointer;">取消</button>
