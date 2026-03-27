@@ -14,10 +14,18 @@ function updateTime() {
 updateTime();
 setInterval(updateTime, 1000);
 
+// P3-3: URL 参数客户端校验
 const urlParams = new URLSearchParams(window.location.search);
-const userId = urlParams.get('userid');
+const rawUserId = urlParams.get('userid');
 const name = urlParams.get('name');
 const no = urlParams.get('no');
+
+// 校验 userId：必须为正整数
+if (!rawUserId || !/^\d+$/.test(rawUserId) || Number(rawUserId) <= 0) {
+  document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-size:18px;color:#c0392b;text-align:center;padding:20px;">❌ 无效的 URL 参数：userid 必须为正整数<br>请从管理员处获取正确的签到链接</div>';
+  throw new Error('Invalid userid parameter');
+}
+const userId = rawUserId;
 
 const userInfoDiv = document.getElementById('userInfo');
 const nameSpan = document.createElement('div');
@@ -169,7 +177,7 @@ function connectWebSocket() {
         clearInterval(qrCountdownInterval); // Stop countdown if checked in
         document.getElementById('qrCountdown').textContent = '';
       }
-    } else if (data.type === 'attendanceUpdated' && data.data.f_29yzstin559 === Number(userId)) {
+    } else if (data.type === 'attendanceUpdated' && data.data.userId === Number(userId)) {
       qrcodeContainer.innerHTML = '<div id="qrcode"></div><span id="status-text"></span><div id="qrCountdown"></div>';
       updateStatus(data.data);
       clearInterval(qrCountdownInterval); // Stop countdown on update
@@ -305,17 +313,21 @@ function renderPersonalStats(data) {
   calendarDiv.innerHTML = calHTML;
 }
 
+// P2-2: flashBackground 计时器全局存储，重复调用前先清理旧计时器
+let flashBackgroundTimers = [];
 function flashBackground(color) {
-  const timers = [];
+  // 清理旧的计时器
+  flashBackgroundTimers.forEach(t => clearTimeout(t));
+  flashBackgroundTimers = [];
   const setColor = (c, delay) => {
-    timers.push(setTimeout(() => { document.body.style.backgroundColor = c; }, delay));
+    flashBackgroundTimers.push(setTimeout(() => { document.body.style.backgroundColor = c; }, delay));
   };
   setColor(color, 0);
   setColor('#f5f5f5', 200);
   setColor(color, 400);
   setColor('#f5f5f5', 600);
   // Cleanup: 确保最终恢复默认背景色
-  timers.push(setTimeout(() => { document.body.style.backgroundColor = '#f5f5f5'; }, 800));
+  flashBackgroundTimers.push(setTimeout(() => { document.body.style.backgroundColor = '#f5f5f5'; }, 800));
 }
 
 function updateStatus(attendanceData) {
@@ -328,7 +340,7 @@ function updateStatus(attendanceData) {
     'late': '迟到',
     'leave': '请假'
   };
-  const status = statusMap[attendanceData.f_0kiw0ulq188];
+  const status = statusMap[attendanceData.status];
   const updatedAt = attendanceData.updated_at 
     ? new Date(attendanceData.updated_at).toLocaleString('zh-CN', { 
         year: 'numeric', 

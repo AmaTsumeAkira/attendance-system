@@ -268,20 +268,20 @@ wss.on('connection', (ws) => {
         }
 
         if (isUpdate) {
-          const attendanceDataBoghew = {
-            f_29yzstin559: numUserId,
-            f_0kiw0ulq188: status,
+          // P2-1: 字段映射，广播前将内部字段名转为公开字段名
+          const attendanceDataPublic = {
+            userId: numUserId,
+            status: status,
             updated_at: currentTimeFormatted
           };
-          wss.clients.forEach(client => {
-            if (client.readyState === WebSocket.OPEN && client.userId === numUserId) {
-              client.send(JSON.stringify({ 
-                type: 'attendanceUpdated', 
-                data: attendanceDataBoghew,
-                studentInfo 
-              }));
-            }
-          });
+          // P3-4: 只发给本人（ws 是提交者连接，其 userId 已在 checkAttendance 时设置）
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'attendanceUpdated',
+              data: attendanceDataPublic,
+              studentInfo
+            }));
+          }
         }
       } catch (error) {
         console.error('Database error:', error);
