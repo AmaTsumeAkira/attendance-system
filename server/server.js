@@ -1,11 +1,18 @@
+require('dotenv').config();
 const express = require('express');
 const WebSocket = require('ws');
 const path = require('path');
 const db = require('./config/db');
 
 const app = express();
-const server = app.listen(3000, '0.0.0.0', () => console.log('Server running on port 3000'));
-const wss = new WebSocket.Server({ server, path: '/ws' });
+const server = app.listen(process.env.PORT || 3000, '0.0.0.0', () => console.log('Server running on port', process.env.PORT || 3000));
+const wss = new WebSocket.Server({ server, path: '/ws', maxPayload: 64 * 1024 });
+
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+
+// 服务端防重复签到：用户ID -> 上次提交时间戳
+const lastSubmitMap = new Map();
+const DEDUP_WINDOW = 10000; // 10秒
 
 // ===== WebSocket 心跳保活 =====
 const HEARTBEAT_INTERVAL = 30000; // 30秒
@@ -67,6 +74,7 @@ function getLocalDate() {
 wss.on('connection', (ws) => {
   // 心跳检测
   ws.isAlive = true;
+  ws.isAuthenticated = false; // 管理员认证状态
   ws.on('pong', () => { ws.isAlive = true; });
 
   ws.on('error', (err) => {
@@ -82,6 +90,30 @@ wss.on('connection', (ws) => {
       data = JSON.parse(message);
     } catch (e) {
       ws.send(JSON.stringify({ type: 'error', message: '无效的消息格式，无法解析 JSON' }));
+      return;
+    }
+
+    // ===== 管理员认证 =====
+    if (data.type === 'auth') {
+      if (data.password === ADMIN_PASSWORD) {
+        ws.isAuthenticated = true;
+        ws.send(JSON.stringify({ type: 'authSuccess', message: '认证成功' }));
+      } else {
+        ws.send(JSON.stringify({ type: 'authFailed', message: '密码错误' }));
+      }
+      return;
+    }
+
+    // 需要管理员权限的操作列表
+    const adminOnlyTypes = ['getAttendanceStats', 'getAttendanceByDate', 'exportCSV', 'clearQRCode'];
+    if (adminOnlyTypes.includes(data.type) && !ws.isAuthenticated) {
+      ws.send(JSON.stringify({ type: 'error', message: '未认证，请先完成管理员验证' }));
+      return;
+    }
+
+    // submitAttendance 也需要认证
+    if (data.type === 'submitAttendance' && !ws.isAuthenticated) {
+      ws.send(JSON.stringify({ type: 'error', message: '未认证，无法提交签到' }));
       return;
     }
 
@@ -117,6 +149,17 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'error', message: '无效的签到状态' }));
         return;
       }
+
+      // 服务端防重复签到（10秒时间窗口）
+      const nowTs = Date.now();
+      const lastSubmit = lastSubmitMap.get(numUserId);
+      if (lastSubmit && (nowTs - lastSubmit) < DEDUP_WINDOW) {
+        const remaining = Math.ceil((DEDUP_WINDOW - (nowTs - lastSubmit)) / 1000);
+        ws.send(JSON.stringify({ type: 'error', message: `用户 ${numUserId} 提交过于频繁，请等待 ${remaining} 秒后再试` }));
+        return;
+      }
+      lastSubmitMap.set(numUserId, nowTs);
+
       try {
         const currentTime = Date.now();
         const qrTimestamp = Number(timestamp);
@@ -414,3 +457,50 @@ wss.on('connection', (ws) => {
     }
   });
 });
+
+// ===== 定期清理防重复提交记录 =====
+setInterval(() => {
+  const now = Date.now();
+  for (const [uid, ts] of lastSubmitMap) {
+    if (now - ts > DEDUP_WINDOW * 2) {
+      lastSubmitMap.delete(uid);
+    }
+  }
+}, 60000);
+
+// ===== 优雅关闭处理 =====
+function gracefulShutdown(signal) {
+  console.log(`\n收到 ${signal}，正在优雅关闭...`);
+
+  // 停止心跳检测
+  clearInterval(heartbeatTimer);
+
+  // 关闭所有 WebSocket 客户端连接
+  wss.clients.forEach(client => {
+    client.close(1001, '服务器正在关闭');
+  });
+
+  wss.close(() => {
+    console.log('WebSocket 服务器已关闭');
+  });
+
+  server.close(() => {
+    console.log('HTTP 服务器已关闭');
+    db.end().then(() => {
+      console.log('数据库连接池已关闭');
+      process.exit(0);
+    }).catch(err => {
+      console.error('关闭数据库连接池失败:', err);
+      process.exit(1);
+    });
+  });
+
+  // 强制退出兜底：10秒后强制退出
+  setTimeout(() => {
+    console.error('优雅关闭超时，强制退出');
+    process.exit(1);
+  }, 10000);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

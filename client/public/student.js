@@ -139,7 +139,13 @@ function connectWebSocket() {
   };
 
   ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
+    let data;
+    try {
+      data = JSON.parse(event.data);
+    } catch (e) {
+      console.error('JSON parse error:', e);
+      return;
+    }
     const statusDiv = document.getElementById('status');
     const qrcodeContainer = document.getElementById('qrcode-container');
     const statusText = document.getElementById('status-text');

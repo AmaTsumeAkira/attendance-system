@@ -236,11 +236,40 @@ function connectWebSocket() {
   ws.onopen = () => {
     reconnectAttempts = 0;
     updateConnectionStatus('connected');
-    resultDiv.textContent = 'WebSocket 已连接';
+    // 管理员认证
+    const password = prompt('请输入管理员密码:');
+    if (password) {
+      ws.send(JSON.stringify({ type: 'auth', password }));
+    } else {
+      resultDiv.textContent = '未输入密码，无法认证';
+      ws.close();
+    }
   };
 
   ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
+    let data;
+    try {
+      data = JSON.parse(event.data);
+    } catch (e) {
+      console.error('JSON parse error:', e);
+      return;
+    }
+
+    if (data.type === 'authSuccess') {
+      resultDiv.textContent = '认证成功，可以开始操作';
+      resultDiv.classList.add('success');
+      return;
+    }
+    if (data.type === 'authFailed') {
+      resultDiv.textContent = '认证失败: ' + data.message;
+      resultDiv.classList.add('error');
+      // 重新弹出密码输入
+      const retryPassword = prompt('密码错误，请重新输入管理员密码:');
+      if (retryPassword) {
+        ws.send(JSON.stringify({ type: 'auth', password: retryPassword }));
+      }
+      return;
+    }
 
     if (data.type === 'attendanceStats') {
       renderStats(data.data);
